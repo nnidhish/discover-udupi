@@ -43,7 +43,7 @@ const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocat
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-7xl h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl w-full max-w-7xl h-[85vh] h-[85dvh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b bg-gradient-to-r from-purple-600 to-blue-600 text-white">
           <div>
@@ -61,9 +61,9 @@ const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocat
         </div>
 
         {/* Map and sidebar container */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
           {/* Map */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0 min-h-[50vh] min-h-[50dvh] md:min-h-0">
             <LeafletMap 
               locations={convertedLocations}
               selectedLocation={selectedMapLocation}
@@ -73,7 +73,7 @@ const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocat
           </div>
 
           {/* Sidebar */}
-          <div className="w-80 border-l bg-gray-50 overflow-y-auto">
+          <div className="w-full md:w-80 md:border-l border-t md:border-t-0 bg-gray-50 overflow-y-auto">
             {/* Search/Filter */}
             <div className="p-4 bg-white border-b">
               <h3 className="font-semibold text-gray-900 mb-3">Locations</h3>

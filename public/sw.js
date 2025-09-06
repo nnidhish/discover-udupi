@@ -141,5 +141,3 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification('Discover Udupi', options)
   );
 });
-export default ServiceWorkerRegistration;
-export { PWAInstallPrompt, OfflineIndicator };

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Offline • Discover Udupi</title>
+  <meta name="theme-color" content="#667eea" />
+  <link rel="icon" href="/icon-192x192.png" />
+  <style>
+    :root { --bg: #0f172a; --card: #111827; --fg: #e5e7eb; --muted:#9ca3af; --brand:#667eea; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--fg);
+      background: radial-gradient(1200px 800px at 20% 10%, #1e293b, #0f172a);
+      display: grid;
+      place-items: center;
+    }
+    .card {
+      width: min(640px, calc(100% - 2rem));
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+      backdrop-filter: blur(6px);
+    }
+    .row { display: flex; align-items: center; gap: 16px; }
+    .logo { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; color: white; background: linear-gradient(135deg, #7c3aed, #2563eb, #14b8a6); font-weight: 800; }
+    .title { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 0.2px; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 0.95rem; }
+    .sep { height: 1px; background: rgba(255,255,255,0.08); margin: 16px 0; border: 0; }
+    .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+    .btn { appearance: none; border: 1px solid rgba(255,255,255,0.12); color: var(--fg); background: transparent; padding: 10px 14px; border-radius: 12px; font-weight: 600; cursor: pointer; }
+    .btn.primary { background: linear-gradient(90deg, #7c3aed, #2563eb); border-color: transparent; }
+    .hint { color: var(--muted); font-size: 0.85rem; margin-top: 12px; }
+    .icons { display:flex; gap:8px; align-items:center; color: var(--muted); }
+    .icons img { width: 24px; height: 24px; opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <div class="row">
+      <div class="logo">U</div>
+      <div>
+        <h1 class="title">Youre offline</h1>
+        <p class="subtitle">Discover Udupi needs a connection for the latest maps, images and reviews.</p>
+      </div>
+    </div>
+
+    <hr class="sep" />
+
+    <section class="grid" aria-labelledby="tips">
+      <div class="pill">&#128246; Tip: Reconnect to load content, then you can browse some pages offline.</div>
+      <div class="pill">&#128205; Maps and images are cached automatically after your first visit.</div>
+    </section>
+
+    <div class="actions">
+      <button class="btn primary" onclick="location.reload()">Retry</button>
+      <button class="btn" onclick="location.href='/'">Go to Home</button>
+    </div>
+
+    <p class="hint">When back online, this page will automatically refresh.</p>
+
+    <div class="icons" aria-hidden="true">
+      <img src="/icon-192x192.png" alt="" />
+      <span>Discover Udupi</span>
+    </div>
+  </main>
+  <script>
+    // Auto-refresh when back online
+    window.addEventListener('online', () => {
+      setTimeout(() => location.reload(), 300);
+    });
+  </script>
+</body>
+</html>

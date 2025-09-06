@@ -33,6 +33,15 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Recalculate on resize/orientation change for proper tile alignment on mobile
+    const handleResize = () => {
+      requestAnimationFrame(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      });
+    };
+
     const initializeMap = async () => {
       if (typeof window === 'undefined' || !mapRef.current) return;
 
@@ -89,6 +98,15 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
         }
 
         mapInstanceRef.current = map;
+
+        // Ensure proper sizing after modal open
+        setTimeout(() => {
+          map.invalidateSize();
+        }, 0);
+
+        // Recalculate on resize/orientation change
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
 
         // Clear existing markers
         markersRef.current.forEach((marker) => marker.remove());
@@ -285,6 +303,8 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
 
     // Cleanup
     return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -300,6 +320,8 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
         [selectedLocation.lat, selectedLocation.lng],
         16
       );
+      // Recalculate size once centered to prevent tile misalignment on mobile
+      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 0);
 
       // Update marker selection
       markersRef.current.forEach((marker) => {
