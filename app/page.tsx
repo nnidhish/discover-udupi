@@ -3,6 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Clock, Star, Camera, Utensils, Waves, Building, Search, Filter, Heart, Share, Navigation } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type { Location } from '@/types/Location';
+import ImageGallery, { PhotoGrid } from '@/components/ImageGallery';
+import ReviewSystem from '@/components/ReviewSystem';
+import { useAuth } from '@/hooks/useAuth';
+import { reviewService } from '@/lib/supabase';
+import toast from 'react-hot-toast';
 
 // Dynamically import MapModal with ssr: false to prevent window errors on the server
 const MapModal = dynamic(() => import('@/components/MapModal'), {
@@ -16,6 +21,11 @@ export default function Home() {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showMapModal, setShowMapModal] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [reviews, setReviews] = useState<any[]>([]);
+
+  const { user, profile, isAuthenticated, signInWithGoogle, signOut, loading: authLoading } = useAuth();
 
   // Your existing locations data
   const locations: Location[] = [
@@ -154,6 +164,84 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Build gallery images for selected location
+  type GalleryImageItem = { id: string; url: string; alt: string; caption?: string; photographer?: string; takenAt?: string };
+
+  const currentGalleryImages: GalleryImageItem[] = React.useMemo(() => {
+    if (!selectedLocation) return [];
+    const primaryUrl = typeof selectedLocation.image === 'string' ? selectedLocation.image : selectedLocation.image?.url || '';
+    const extras = [
+      `https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&h=800&fit=crop&auto=format&q=75&sig=${selectedLocation.id}`,
+      `https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&h=800&fit=crop&auto=format&q=75&sig=${selectedLocation.id + 1}`
+    ];
+    const images = [primaryUrl, ...extras].filter(Boolean);
+    return images.map((url, idx) => ({
+      id: `${selectedLocation.id}-${idx}`,
+      url,
+      alt: `${selectedLocation.name} photo ${idx + 1}`,
+    }));
+  }, [selectedLocation]);
+
+  // Fetch reviews when a location is selected
+  useEffect(() => {
+    if (!selectedLocation) { setReviews([]); return; }
+    (async () => {
+      const { data, error } = await reviewService.getLocationReviews(String(selectedLocation.id), 10, 0);
+      if (error) { setReviews([]); return; }
+      const mapped = (data || []).map((r: any) => ({
+        id: r.id,
+        userId: r.user_id,
+        userName: r.profiles?.full_name || 'Explorer',
+        userAvatar: r.profiles?.avatar_url || '/icon-192x192.png',
+        rating: r.rating,
+        title: r.title || '',
+        comment: r.comment,
+        images: (r.review_images || []).map((ri: any) => ri.url),
+        createdAt: r.created_at,
+        helpfulCount: r.helpful_count ?? 0,
+        isVerified: r.profiles?.is_verified ?? false,
+        visitDate: r.visit_date || undefined,
+      }));
+      setReviews(mapped);
+    })();
+  }, [selectedLocation]);
+
+  const handleReviewSubmit = async (partial: any) => {
+    if (!isAuthenticated || !user || !selectedLocation) {
+      toast.error('Please sign in to submit a review');
+      return;
+    }
+    const payload = {
+      location_id: String(selectedLocation.id),
+      user_id: user.id,
+      rating: partial.rating,
+      title: partial.title,
+      comment: partial.comment,
+      visit_date: partial.visitDate || null,
+    };
+    const { error } = await reviewService.submitReview(payload as any);
+    if (error) {
+      toast.error('Failed to submit review');
+      return;
+    }
+    const newReview = {
+      id: `${Date.now()}`,
+      userId: user.id,
+      userName: profile?.full_name || user.email || 'You',
+      userAvatar: profile?.avatar_url || '/icon-192x192.png',
+      rating: partial.rating,
+      title: partial.title || '',
+      comment: partial.comment,
+      images: partial.images || [],
+      createdAt: new Date().toISOString(),
+      helpfulCount: 0,
+      isVerified: !!profile?.is_verified,
+      visitDate: partial.visitDate || undefined,
+    };
+    setReviews(prev => [newReview, ...prev]);
+    toast.success('Review submitted');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-teal-500 flex items-center justify-center">
@@ -202,6 +290,43 @@ export default function Home() {
               <button className="p-2 text-gray-600 hover:text-purple-600 transition-colors">
                 <Share className="w-5 h-5" />
               </button>
+              {authLoading ? (
+                <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
+              ) : isAuthenticated ? (
+                <div className="flex items-center space-x-2">
+                  <img
+                    src={profile?.avatar_url || 'https://www.gravatar.com/avatar/?d=mp'}
+                    alt={profile?.full_name || user?.email || 'User'}
+                    className="w-8 h-8 rounded-full border"
+                  />
+                  <button
+                    onClick={() => signOut()}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => signInWithGoogle()}
+                  className="px-3 py-1 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full hover:from-purple-700 hover:to-blue-700"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+          </div>
+          {/* Mobile Search */}
+          <div className="md:hidden pb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search places..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+              />
             </div>
           </div>
         </div>
@@ -429,6 +554,30 @@ export default function Home() {
                 ))}
             </div>
               </div>
+
+              {currentGalleryImages.length > 0 && (
+                <div className="mb-8">
+                  <h4 className="font-semibold mb-3">Photos</h4>
+                  <PhotoGrid
+                    images={currentGalleryImages}
+                    locationName={selectedLocation.name}
+                    onImageClick={(i) => {
+                      setGalleryIndex(i);
+                      setIsGalleryOpen(true);
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className="mb-8">
+                <h4 className="font-semibold mb-3">Reviews</h4>
+                <ReviewSystem
+                  locationId={String(selectedLocation.id)}
+                  locationName={selectedLocation.name}
+                  initialReviews={reviews}
+                  onReviewSubmit={handleReviewSubmit}
+                />
+              </div>
               
               <div className="flex space-x-3">
                 <button className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-2xl font-semibold hover:from-purple-700 hover:to-blue-700 transition-all transform hover:scale-105 flex items-center justify-center">
@@ -460,6 +609,14 @@ export default function Home() {
           selectedCategory={selectedCategory}
         />
       )}
+
+      <ImageGallery
+        images={currentGalleryImages}
+        locationName={selectedLocation?.name || 'Discover Udupi'}
+        isOpen={isGalleryOpen}
+        onClose={() => setIsGalleryOpen(false)}
+        initialIndex={galleryIndex}
+      />
 
       {/* Floating Action Button */}
       <button 

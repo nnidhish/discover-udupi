@@ -29,6 +29,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<LeafletMapType | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const timeoutsRef = useRef<number[]>([]);
   const [mapStyle, setMapStyle] = useState<'street' | 'satellite'>('street');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -36,10 +37,23 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
     // Recalculate on resize/orientation change for proper tile alignment on mobile
     const handleResize = () => {
       requestAnimationFrame(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
+        safeInvalidate();
       });
+    };
+
+    let resizeObserver: ResizeObserver | null = null;
+
+    const safeInvalidate = () => {
+      const m = mapInstanceRef.current;
+      // Only invalidate if map still exists and container is connected
+      if (!m) return;
+      const container = (m as any).getContainer ? (m as any).getContainer() : null;
+      if (!container || !(container as any).isConnected) return;
+      try {
+        m.invalidateSize();
+      } catch (_) {
+        // no-op
+      }
     };
 
     const initializeMap = async () => {
@@ -100,13 +114,28 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
         mapInstanceRef.current = map;
 
         // Ensure proper sizing after modal open
-        setTimeout(() => {
-          map.invalidateSize();
-        }, 0);
+        timeoutsRef.current.push(window.setTimeout(() => {
+          safeInvalidate();
+        }, 0));
 
         // Recalculate on resize/orientation change
         window.addEventListener('resize', handleResize);
         window.addEventListener('orientationchange', handleResize);
+
+        // Observe container size changes to keep tiles aligned on mobile
+        if (mapRef.current && 'ResizeObserver' in window) {
+          resizeObserver = new ResizeObserver(() => {
+            requestAnimationFrame(() => {
+              safeInvalidate();
+            });
+          });
+          resizeObserver.observe(mapRef.current);
+        }
+
+        // Additional delayed invalidation for mobile browsers after layout settles
+        timeoutsRef.current.push(window.setTimeout(() => {
+          safeInvalidate();
+        }, 300));
 
         // Clear existing markers
         markersRef.current.forEach((marker) => marker.remove());
@@ -305,13 +334,21 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+      }
+      if (timeoutsRef.current.length) {
+        timeoutsRef.current.forEach((id) => clearTimeout(id));
+        timeoutsRef.current = [];
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
       markersRef.current = [];
     };
-  }, [locations, onLocationSelect, mapStyle, selectedLocation]);
+  }, [locations, onLocationSelect, mapStyle]);
 
   // Center map on selected location
   useEffect(() => {
@@ -399,7 +436,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
       )}
 
       {/* Map container */}
-      <div ref={mapRef} className="h-full w-full rounded-xl" />
+      <div ref={mapRef} className="h-full w-full rounded-xl overflow-hidden" />
 
       {/* Custom controls */}
       <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-2">
