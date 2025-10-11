@@ -114,7 +114,7 @@ export const reviewService = {
     rating: number;
     title?: string;
     comment: string;
-    visit_date?: string;
+    visit_date?: string | null;
   }) {
     return supabase
       .from('reviews')

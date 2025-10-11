@@ -19,8 +19,161 @@
   }
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, 
+a {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.button-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.button-loading::after {
+  content: "";
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: button-loading-spinner 0.6s linear infinite;
+}
+
+/* Custom Scrollbar Styles - Overlay on content, no padding */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.6);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.8);
+}
+
+/* Scrollbar that blends with image - white overlay */
+.scrollbar-blend::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-blend::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-blend::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+
+.scrollbar-blend::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Uniform Button Styles */
+.btn-icon {
+  @apply flex items-center justify-center flex-shrink-0;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.btn-icon-sm {
+  @apply flex items-center justify-center flex-shrink-0;
+  width: 40px;
+  height: 40px;
+}
+
+.btn-icon-md {
+  @apply flex items-center justify-center flex-shrink-0;
+  width: 48px;
+  height: 48px;
+}
+
+.btn-icon-lg {
+  @apply flex items-center justify-center flex-shrink-0;
+  width: 56px;
+  height: 56px;
+}
+
+/* Uniform Text Styles */
+.text-rating {
+  @apply text-gray-900 font-semibold;
+}
+
+.text-rating-count {
+  @apply text-gray-600 text-sm;
+}
+
+.text-secondary {
+  @apply text-gray-600;
+}
+
+.text-muted {
+  @apply text-gray-500;
+}
+
+/* Card Styles */
+.card-modal {
+  @apply bg-white rounded-3xl shadow-2xl overflow-hidden;
+}
+
+.card-location {
+  @apply bg-white rounded-3xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer;
+}
+
+/* Badge Styles */
+.badge-rating {
+  @apply bg-purple-100 rounded-2xl px-4 py-2 flex items-center space-x-2 flex-shrink-0;
+}
+
+.badge-rating-sm {
+  @apply bg-white/90 backdrop-blur rounded-full px-3 py-1 flex items-center space-x-1;
+}
+
+/* Button Variants */
+.btn-primary {
+  @apply bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:from-purple-700 hover:to-blue-700 transition-all;
+}
+
+.btn-outline-primary {
+  @apply border-2 border-purple-600 text-purple-600 font-semibold hover:bg-purple-50 transition-colors;
+}
+
+.btn-outline-secondary {
+  @apply border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition-colors;
+}
+
+/* Close Button */
+.btn-close {
+  @apply bg-gray-900/90 backdrop-blur p-3 rounded-full hover:bg-gray-900 transition-all shadow-lg flex items-center justify-center;
 }

@@ -1,55 +1,72 @@
 // components/MapModal.tsx - Updated for Leaflet
 'use client';
-import { useState } from 'react';
-import { X, MapPin, Navigation } from 'lucide-react';
-import LeafletMap from './LeafletMap';
+import { X, Navigation } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 import type { Location } from '@/types/Location';
+
+// Fix Leaflet icon issue
+interface IconDefault extends L.Icon.Default {
+  _getIconUrl?: string;
+}
+
+delete (L.Icon.Default.prototype as IconDefault)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: '/images/marker-icon-2x.png',
+  iconUrl: '/images/marker-icon.png',
+  shadowUrl: '/images/marker-shadow.png',
+});
+
+// MapBounds component to handle map fitting
+function MapBounds({ locations }: { locations: Location[] }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (locations.length > 0) {
+      const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lng]));
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [map, locations]);
+
+  return null;
+}
 
 interface MapModalProps {
   isOpen: boolean;
   onClose: () => void;
   locations: Location[];
   onLocationSelect: (location: Location) => void;
-  selectedCategory: string; // <-- Add this line
+  selectedCategory: string;
 }
 
-const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocationSelect, selectedCategory }) => {
+const MapModal: React.FC<MapModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  locations, 
+  onLocationSelect, 
+  selectedCategory 
+}) => {
   const [selectedMapLocation, setSelectedMapLocation] = useState<Location | null>(null);
-
-  if (!isOpen) return null;
-
-  // Convert your locations to the format expected by LeafletMap
-  const convertedLocations: Location[] = locations.map(loc => ({
-    id: loc.id,
-    name: loc.name,
-    category: loc.category,
-    image: typeof loc.image === 'string' ? loc.image : loc.image?.url || '',
-    description: loc.description ?? '', // <-- Ensure string, never undefined
-    tips: loc.tips ?? '',
-    hours: loc.hours ?? '',
-    rating: loc.rating ?? 0,
-    reviews: loc.reviews ?? 0,
-    address: loc.address ?? '',
-    highlights: loc.highlights ?? [],
-    bestTime: loc.bestTime ?? '',
-    lat: loc.lat,
-    lng: loc.lng,
-  }));
 
   const handleLocationSelect = (location: Location) => {
     setSelectedMapLocation(location);
     onLocationSelect(location);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-7xl h-[85vh] h-[85dvh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-4 md:inset-10 bg-white rounded-3xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b bg-gradient-to-r from-purple-600 to-blue-600 text-white">
           <div>
             <h2 className="text-2xl font-bold">Explore Udupi Map</h2>
             <p className="text-purple-100 mt-1">
-              {convertedLocations.length} amazing places to discover
+              {locations.length} amazing places to discover
             </p>
           </div>
           <button 
@@ -63,13 +80,43 @@ const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocat
         {/* Map and sidebar container */}
         <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
           {/* Map */}
-          <div className="flex-1 min-w-0 min-h-[50vh] min-h-[50dvh] md:min-h-0">
-            <LeafletMap 
-              locations={convertedLocations}
-              selectedLocation={selectedMapLocation}
-              onLocationSelect={handleLocationSelect}
+          <div className="flex-1 relative min-h-[50vh] md:min-h-0">
+            <MapContainer
+              center={[13.3409, 74.7421]}
+              zoom={13}
               className="w-full h-full"
-            />
+              style={{ height: '100%', minHeight: '400px' }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <MapBounds locations={locations} />
+              {locations.map((location) => (
+                <Marker
+                  key={location.id}
+                  position={[location.lat, location.lng]}
+                  eventHandlers={{
+                    click: () => handleLocationSelect(location),
+                  }}
+                >
+                  <Popup>
+                    <div className="p-2">
+                      <h3 className="font-semibold">{location.name}</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {location.description.substring(0, 100)}...
+                      </p>
+                      <button
+                        onClick={() => handleLocationSelect(location)}
+                        className="mt-2 text-sm text-purple-600 hover:text-purple-800 font-semibold"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
           </div>
 
           {/* Sidebar */}
@@ -86,8 +133,8 @@ const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocat
                     {category === 'all' ? 'All Categories' : category}
                     <span className="float-right text-gray-500">
                       {category === 'all' 
-                        ? convertedLocations.length 
-                        : convertedLocations.filter(loc => loc.category === category).length
+                        ? locations.length 
+                        : locations.filter(loc => loc.category === category).length
                       }
                     </span>
                   </button>
@@ -97,7 +144,7 @@ const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocat
 
             {/* Location List */}
             <div className="p-4 space-y-3">
-              {convertedLocations.map((location) => (
+              {locations.map((location) => (
                 <div
                   key={location.id}
                   className={`p-3 bg-white rounded-lg border cursor-pointer transition-all hover:shadow-md ${
@@ -118,7 +165,7 @@ const MapModal: React.FC<MapModalProps> = ({ isOpen, onClose, locations, onLocat
                         {location.name}
                       </h4>
                       <p className="text-xs text-gray-600 mt-1 line-clamp-2">
-                        {location.short_description || location.description}
+                        {location.description}
                       </p>
                       
                       {/* Rating */}

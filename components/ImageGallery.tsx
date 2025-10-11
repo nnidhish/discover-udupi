@@ -1,6 +1,6 @@
 // components/ImageGallery.tsx
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, X, ZoomIn, Download, Share } from 'lucide-react';
 import Image from 'next/image';
 
@@ -35,36 +35,15 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({
     setCurrentIndex(initialIndex);
   }, [initialIndex]);
 
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      
-      switch (e.key) {
-        case 'Escape':
-          onClose();
-          break;
-        case 'ArrowLeft':
-          goToPrevious();
-          break;
-        case 'ArrowRight':
-          goToNext();
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isOpen, currentIndex]);
-
-  const goToNext = () => {
+  const goToNext = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % images.length);
     setIsZoomed(false);
-  };
+  }, [images.length]);
 
-  const goToPrevious = () => {
+  const goToPrevious = useCallback(() => {
     setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
     setIsZoomed(false);
-  };
+  }, [images.length]);
 
   const downloadImage = async () => {
     const image = images[currentIndex];
@@ -101,6 +80,17 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({
       alert('Link copied to clipboard!');
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') goToNext();
+      if (e.key === 'ArrowLeft') goToPrevious();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, goToNext, goToPrevious]);
 
   if (!isOpen) return null;
 
@@ -240,8 +230,8 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ images, locationName, onImageClic
             height={200}
             className="w-full h-32 md:h-40 object-cover group-hover:scale-110 transition-transform duration-300"
           />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
-            <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center" aria-label={`Open photo from ${locationName}`}>
+          <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </div>
           {index === displayImages.length - 1 && images.length > 6 && (
             <div className="absolute inset-0 bg-black/70 flex items-center justify-center">

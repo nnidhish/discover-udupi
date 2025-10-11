@@ -1,6 +1,8 @@
 // components/LeafletMap.tsx - Replace your GoogleMap.tsx with this
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import L, { Map as LeafletMap, Marker } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Layers, ZoomOut } from 'lucide-react';
 import type { Location } from '@/types/Location';
 
@@ -11,8 +13,9 @@ interface LeafletMapProps {
   className?: string;
 }
 
-import type { Map as LeafletMapType } from 'leaflet';
-import L, { Marker } from 'leaflet';
+export interface CustomMarker extends Marker {
+  getElement(): HTMLElement | undefined;
+}
 
 declare global {
   interface Window {
@@ -20,19 +23,76 @@ declare global {
   }
 }
 
-const LeafletMap: React.FC<LeafletMapProps> = ({
+// Helper function for category icons
+const getCategoryIcon = (category: string): string => {
+  const icons: Record<string, string> = {
+    temples: '🕉️',
+    food: '🍽️',
+    beaches: '🏖️',
+    photography: '📸',
+    shopping: '🛍️',
+    culture: '🎭',
+  };
+  return icons[category] || '📍';
+};
+
+const LeafletMapComponent: React.FC<LeafletMapProps> = ({
   locations,
   selectedLocation,
   onLocationSelect,
   className = 'w-full h-full rounded-xl',
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<LeafletMapType | null>(null);
-  const markersRef = useRef<Marker[]>([]);
+  const mapInstanceRef = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<CustomMarker[]>([]);
   const timeoutsRef = useRef<number[]>([]);
   const [mapStyle, setMapStyle] = useState<'street' | 'satellite'>('street');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Center map on selected location
+  useEffect(() => {
+    if (!selectedLocation || !mapInstanceRef.current) return;
+
+    mapInstanceRef.current.setView(
+      [selectedLocation.lat, selectedLocation.lng],
+      16
+    );
+
+    // Recalculate size once centered to prevent tile misalignment on mobile
+    setTimeout(() => mapInstanceRef.current?.invalidateSize(), 0);
+
+    // Update marker selection
+    markersRef.current.forEach((marker) => {
+      const markerElement = marker.getElement();
+      if (markerElement) {
+        const markerDiv = markerElement.querySelector('.custom-marker');
+        if (markerDiv) {
+          markerDiv.classList.remove('selected');
+        }
+      }
+    });
+
+    // Highlight selected marker
+    const selectedMarker = markersRef.current.find((marker) => {
+      const pos = marker.getLatLng();
+      return (
+        Math.abs(pos.lat - selectedLocation.lat) < 0.001 &&
+        Math.abs(pos.lng - selectedLocation.lng) < 0.001
+      );
+    });
+
+    if (selectedMarker) {
+      const markerElement = selectedMarker.getElement();
+      if (markerElement) {
+        const markerDiv = markerElement.querySelector('.custom-marker');
+        if (markerDiv) {
+          markerDiv.classList.add('selected');
+        }
+      }
+    }
+  }, [selectedLocation?.id]);
+
+  // Initialize map and markers
   useEffect(() => {
     // Recalculate on resize/orientation change for proper tile alignment on mobile
     const handleResize = () => {
@@ -45,13 +105,12 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
 
     const safeInvalidate = () => {
       const m = mapInstanceRef.current;
-      // Only invalidate if map still exists and container is connected
       if (!m) return;
-      const container = (m as any).getContainer ? (m as any).getContainer() : null;
-      if (!container || !(container as any).isConnected) return;
+      const container: HTMLElement = m.getContainer();
+      if (!container || !container.isConnected) return;
       try {
         m.invalidateSize();
-      } catch (_) {
+      } catch {
         // no-op
       }
     };
@@ -255,16 +314,20 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
             iconAnchor: [20, 40],
           });
 
-          const marker = L.marker([location.lat, location.lng], {
-            icon: customIcon,
-          });
+          const marker = L.marker([location.lat, location.lng], { 
+            icon: customIcon 
+          }) as CustomMarker;
 
           // Create rich popup content
+          const imageUrl = typeof location.image === 'string' 
+            ? location.image 
+            : location.image?.url || '';
+          
           const popupContent = `
             <div class="custom-popup">
               ${
-                location.image
-                  ? `<img src="${location.image}" alt="${location.name}" class="popup-image" />`
+                imageUrl
+                  ? `<img src="${imageUrl}" alt="${location.name}" class="popup-image" />`
                   : ''
               }
               <div class="popup-title">${location.name}</div>
@@ -309,178 +372,87 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
           const location = locations.find((loc) => loc.id === locationId);
           if (location) {
             onLocationSelect(location);
-            // Close popup after selection
-            map.closePopup();
           }
         };
-
-        // Add custom zoom controls
-        L.control
-          .zoom({
-            position: 'bottomright',
-          })
-          .addTo(map);
-
-        setIsLoading(false);
       } catch (error) {
         console.error('Error initializing map:', error);
+      } finally {
         setIsLoading(false);
       }
     };
 
     initializeMap();
 
-    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
       if (resizeObserver) {
         resizeObserver.disconnect();
-        resizeObserver = null;
       }
-      if (timeoutsRef.current.length) {
-        timeoutsRef.current.forEach((id) => clearTimeout(id));
-        timeoutsRef.current = [];
-      }
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-      markersRef.current = [];
+      timeoutsRef.current.forEach(clearTimeout);
     };
-  }, [locations, onLocationSelect, mapStyle]);
-
-  // Center map on selected location
-  useEffect(() => {
-    if (mapInstanceRef.current && selectedLocation) {
-      mapInstanceRef.current.setView(
-        [selectedLocation.lat, selectedLocation.lng],
-        16
-      );
-      // Recalculate size once centered to prevent tile misalignment on mobile
-      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 0);
-
-      // Update marker selection
-      markersRef.current.forEach((marker) => {
-        const markerElement = marker.getElement();
-        if (markerElement) {
-          const markerDiv = markerElement.querySelector('.custom-marker');
-          if (markerDiv) {
-            markerDiv.classList.remove('selected');
-          }
-        }
-      });
-
-      // Highlight selected marker
-      const selectedMarker = markersRef.current.find((marker) => {
-        const pos = marker.getLatLng();
-        return (
-          Math.abs(pos.lat - selectedLocation.lat) < 0.001 &&
-          Math.abs(pos.lng - selectedLocation.lng) < 0.001
-        );
-      });
-
-      if (selectedMarker) {
-        const markerElement = selectedMarker.getElement();
-        if (markerElement) {
-          const markerDiv = markerElement.querySelector('.custom-marker');
-          if (markerDiv) {
-            markerDiv.classList.add('selected');
-          }
-        }
-      }
-    }
-  }, [selectedLocation]);
-
-  const getCategoryIcon = (category: string) => {
-    const icons = {
-      temples: '🕉️',
-      food: '🍽️',
-      beaches: '🏖️',
-      photography: '📸',
-      shopping: '🛍️',
-      culture: '🎭',
-    };
-    return icons[category as keyof typeof icons] || '📍';
-  };
+  }, [locations, mapStyle, selectedLocation, onLocationSelect]);
 
   const toggleMapStyle = () => {
-    setMapStyle((prev) => (prev === 'street' ? 'satellite' : 'street'));
-  };
+    const newStyle = mapStyle === 'street' ? 'satellite' : 'street';
+    setMapStyle(newStyle);
 
-  const zoomToFitAll = () => {
-    if (mapInstanceRef.current && locations.length > 0) {
-      const group = L.featureGroup(markersRef.current as Marker[]);
-      mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
+    if (mapInstanceRef.current) {
+      // Remove existing layers
+      mapInstanceRef.current.eachLayer((layer) => {
+        if (layer instanceof L.TileLayer) {
+          mapInstanceRef.current?.removeLayer(layer);
+        }
+      });
+
+      // Add new layer
+      if (newStyle === 'street') {
+        L.tileLayer(
+          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          {
+            attribution:
+              '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+          }
+        ).addTo(mapInstanceRef.current);
+      } else {
+        L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          {
+            attribution:
+              'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 19,
+          }
+        ).addTo(mapInstanceRef.current);
+      }
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <span className="loader"></span>
+      </div>
+    );
+  }
+
   return (
-    <div className={`relative ${className}`}>
-      {/* Leaflet CSS */}
-      <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-        crossOrigin=""
-      />
-
-      {/* Loading overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white bg-opacity-90">
-          <div className="text-center">
-            <div className="mb-2 h-8 w-8 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
-            <p className="text-sm text-gray-600">Loading map...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Map container */}
-      <div ref={mapRef} className="h-full w-full rounded-xl overflow-hidden" />
-
-      {/* Custom controls */}
-      <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-2">
+    <div ref={mapRef} className={className} id="map">
+      <div className="absolute top-4 right-4 z-10">
         <button
           onClick={toggleMapStyle}
-          className="rounded-lg border bg-white p-2 shadow-lg transition-colors hover:bg-gray-50"
-          title={mapStyle === 'street' ? 'Switch to satellite' : 'Switch to street'}
+          className="bg-white rounded-full p-2 shadow-md hover:shadow-lg transition-all duration-300"
+          aria-label="Toggle map style"
         >
-          <Layers className="h-5 w-5" />
+          {mapStyle === 'street' ? (
+            <Layers className="w-5 h-5 text-gray-800" />
+          ) : (
+            <ZoomOut className="w-5 h-5 text-gray-800" />
+          )}
         </button>
-
-        <button
-          onClick={zoomToFitAll}
-          className="rounded-lg border bg-white p-2 shadow-lg transition-colors hover:bg-gray-50"
-          title="Show all locations"
-        >
-          <ZoomOut className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 z-[1000] rounded-lg border bg-white p-3 shadow-lg">
-        <div className="mb-2 text-sm font-semibold">Categories</div>
-        <div className="flex flex-wrap gap-2">
-          {Object.entries({
-            temples: { icon: '🕉️', color: '#FF6B6B', name: 'Temples' },
-            food: { icon: '🍽️', color: '#4ECDC4', name: 'Food' },
-            beaches: { icon: '🏖️', color: '#45B7D1', name: 'Beaches' },
-            photography: { icon: '📸', color: '#96CEB4', name: 'Photos' },
-          }).map(([key, { icon, color, name }]) => (
-            <div key={key} className="flex items-center gap-1">
-              <div
-                className="flex h-4 w-4 items-center justify-center rounded-full text-xs"
-                style={{ backgroundColor: color }}
-              >
-                {icon}
-              </div>
-              <span className="text-xs">{name}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
 };
 
-export default LeafletMap;
+export default LeafletMapComponent;
