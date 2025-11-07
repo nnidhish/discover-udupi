@@ -176,7 +176,9 @@ const ReviewCard: React.FC<{ review: Review }> = ({ review }) => {
   const [showFullComment, setShowFullComment] = useState(false);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
 
-  const handleHelpful = (type: 'up' | 'down') => {
+  const handleHelpful = async (type: 'up' | 'down', reviewId: string) => {
+    // TODO: Implement actual API call to persist helpful votes
+    // For now, just update local state
     if (userVote === type) {
       setUserVote(null);
       setHelpfulCount(prev => type === 'up' ? prev - 1 : prev + 1);
@@ -285,7 +287,7 @@ const ReviewCard: React.FC<{ review: Review }> = ({ review }) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button
-            onClick={() => handleHelpful('up')}
+            onClick={() => handleHelpful('up', review.id)}
             className={`flex items-center space-x-1 px-3 py-1 rounded-full transition-colors ${
               userVote === 'up'
                 ? 'bg-green-100 text-green-700'
@@ -296,7 +298,7 @@ const ReviewCard: React.FC<{ review: Review }> = ({ review }) => {
             <span className="text-sm">{helpfulCount > 0 ? helpfulCount : ''}</span>
           </button>
           <button
-            onClick={() => handleHelpful('down')}
+            onClick={() => handleHelpful('down', review.id)}
             className={`p-1 rounded-full transition-colors ${
               userVote === 'down'
                 ? 'bg-red-100 text-red-700'
@@ -395,13 +397,20 @@ const WriteReviewModal: React.FC<{
               <label className="block text-sm font-medium mb-2">Your Review</label>
               <textarea
                 value={comment}
-                onChange={(e) => setComment(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value.length <= 1000) {
+                    setComment(e.target.value);
+                  }
+                }}
                 rows={4}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"
                 placeholder="Share your experience, tips, and what others should know..."
                 required
+                maxLength={1000}
               />
-              <p className="text-xs text-gray-500 mt-1">{comment.length}/1000 characters</p>
+              <p className={`text-xs mt-1 ${comment.length >= 1000 ? 'text-red-500' : 'text-gray-500'}`}>
+                {comment.length}/1000 characters
+              </p>
             </div>
 
             {/* Visit Date */}
@@ -420,10 +429,15 @@ const WriteReviewModal: React.FC<{
               <label className="block text-sm font-medium mb-2">Add Photos (Optional)</label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                 <Camera className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600 mb-2">Drag photos here or click to upload</p>
+                <p className="text-gray-600 mb-2">Image upload coming soon</p>
+                <p className="text-xs text-gray-500 mb-2">
+                  This feature will allow you to upload photos with your review
+                </p>
                 <button
                   type="button"
-                  className="bg-purple-100 text-purple-600 px-4 py-2 rounded-lg hover:bg-purple-200 transition-colors"
+                  disabled
+                  className="bg-gray-100 text-gray-400 px-4 py-2 rounded-lg cursor-not-allowed"
+                  title="Coming soon"
                 >
                   Choose Photos
                 </button>

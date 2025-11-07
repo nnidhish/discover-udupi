@@ -125,20 +125,32 @@ const MapModal: React.FC<MapModalProps> = ({
             <div className="p-4 bg-white border-b">
               <h3 className="font-semibold text-gray-900 mb-3">Locations</h3>
               <div className="space-y-2">
-                {['all', 'temples', 'food', 'beaches', 'photography'].map((category) => (
-                  <button
-                    key={category}
-                    className="block w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-purple-100 hover:text-purple-700 transition-colors capitalize"
-                  >
-                    {category === 'all' ? 'All Categories' : category}
-                    <span className="float-right text-gray-500">
-                      {category === 'all' 
-                        ? locations.length 
-                        : locations.filter(loc => loc.category === category).length
-                      }
-                    </span>
-                  </button>
-                ))}
+                {['all', 'temples', 'food', 'beaches', 'photography'].map((category) => {
+                  const isActive = selectedCategory === category;
+                  const count = category === 'all' 
+                    ? locations.length 
+                    : locations.filter(loc => loc.category === category).length;
+                  
+                  return (
+                    <button
+                      key={category}
+                      onClick={() => {
+                        // This would need to be passed as a prop to actually filter
+                        // For now, we'll just highlight the active category
+                      }}
+                      className={`block w-full text-left px-3 py-2 text-sm rounded-lg transition-colors capitalize ${
+                        isActive 
+                          ? 'bg-purple-600 text-white' 
+                          : 'hover:bg-purple-100 hover:text-purple-700'
+                      }`}
+                    >
+                      {category === 'all' ? 'All Categories' : category}
+                      <span className={`float-right ${isActive ? 'text-purple-100' : 'text-gray-500'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

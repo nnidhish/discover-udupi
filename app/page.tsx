@@ -16,8 +16,8 @@ type Location = Omit<BaseLocation, 'image'> & {
 import ImageGallery, { PhotoGrid } from '@/components/ImageGallery';
 import ReviewSystem from '@/components/ReviewSystem';
 import { useAuth } from '@/hooks/useAuth';
-import { reviewService } from '@/lib/supabase';
-import toast from 'react-hot-toast';
+import { reviewService, locationService } from '@/lib/supabase';
+import toast, { Toaster } from 'react-hot-toast';
 import { getDirectionsUrl } from '@/utils/maps';
 
 // Types for reviews
@@ -97,13 +97,6 @@ export default function Home() {
     return matchesCategory && matchesSearch;
   });
 
-  const toggleFavorite = (locationId: number) => {
-    setFavorites(prev => 
-      prev.includes(locationId) 
-        ? prev.filter(id => id !== locationId)
-        : [...prev, locationId]
-    );
-  };
 
   const showMap = () => {
     setShowMapModal(true);
@@ -214,139 +207,84 @@ export default function Home() {
     );
   }
 
-  // Location Details Modal
-  const renderLocationDetails = () => {
-    if (!selectedLocation) return null;
+  // Share location functionality
+  const handleShare = async (location: Location) => {
+    const shareData = {
+      title: `Check out ${location.name} on Discover Udupi`,
+      text: location.description,
+      url: `${typeof window !== 'undefined' ? window.location.origin : ''}/?location=${location.id}`,
+    };
 
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl w-full max-w-3xl h-[85vh] relative flex flex-col overflow-hidden">
-          {/* Fixed Header with Close Button */}
-          <div className="absolute top-4 right-4 z-20">
-            <button
-              onClick={() => setSelectedLocation(null)}
-              className="btn-close-light"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        toast.success('Shared successfully!');
+      } catch (error) {
+        // User cancelled or error occurred
+        if ((error as Error).name !== 'AbortError') {
+          toast.error('Failed to share');
+        }
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(shareData.url);
+        toast.success('Link copied to clipboard!');
+      } catch (error) {
+        toast.error('Failed to copy link');
+      }
+    }
+  };
 
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="relative h-72 w-full overflow-hidden">
-              <Image
-                src={typeof selectedLocation.image === 'string' 
-                  ? selectedLocation.image 
-                  : selectedLocation.image?.url || '/fallback-image.jpg'}
-                alt={selectedLocation.name}
-                fill
-                className="object-cover w-full h-full"
-                priority
-              />
-            </div>
+  // Load favorites from Supabase on mount
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      (async () => {
+        const { data, error } = await locationService.getFavorites(user.id);
+        if (!error && data) {
+          const favoriteIds = data
+            .map((fav: any) => fav.locations?.id)
+            .filter(Boolean)
+            .map((id: string) => parseInt(id, 10))
+            .filter((id: number) => !isNaN(id));
+          setFavorites(favoriteIds);
+        }
+      })();
+    }
+  }, [isAuthenticated, user]);
 
-            <div className="p-6">
-              <h2 className="text-2xl font-bold mb-2">{selectedLocation.name}</h2>
-              <p className="text-gray-600 mb-4">{selectedLocation.description}</p>
-              
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-gray-500" />
-                  <span>{selectedLocation.hours}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-gray-500" />
-                  <span>{selectedLocation.address}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Star className="w-5 h-5 text-yellow-500" />
-                  <span className="font-semibold">{selectedLocation.rating}</span>
-                  <span className="text-gray-500 text-sm">({selectedLocation.reviews} reviews)</span>
-                </div>
-                {/* <div className="flex items-center gap-2">
-                  <Navigation className="w-5 h-5 text-purple-600" />
-                  <button
-                    onClick={() => {
-                      const url = getDirectionsUrl({
-                        lat: selectedLocation.lat,
-                        lng: selectedLocation.lng,
-                        name: selectedLocation.name
-                      });
-                      window.open(url, '_blank');
-                    }}
-                    className="text-sm text-purple-600 font-semibold hover:underline"
-                  >
-                    Get Directions
-                  </button>
-                </div> */}
-              </div>
+  // Persist favorites to Supabase
+  const toggleFavorite = async (locationId: number) => {
+    if (!isAuthenticated || !user) {
+      toast.error('Please sign in to save favorites');
+      return;
+    }
 
-              <div className="mt-6">
-                <h4 className="font-semibold mb-3">Highlights</h4>
-                <div className="flex flex-wrap gap-2">
-                  {(selectedLocation.highlights ?? []).map((highlight, i) => (
-                    <span key={i} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm">
-                      {highlight}
-                    </span>
-                ))}
-                </div>
-              </div>
+    const isFavorite = favorites.includes(locationId);
+    const locationIdStr = String(locationId);
 
-              {currentGalleryImages.length > 0 && (
-                <div className="mb-8">
-                  <h4 className="font-semibold mb-3">Photos</h4>
-                  <PhotoGrid
-                    images={currentGalleryImages}
-                    locationName={selectedLocation.name}
-                    onImageClick={(i) => {
-                      setGalleryIndex(i);
-                      setIsGalleryOpen(true);
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="mb-8">
-                <h4 className="font-semibold mb-3">Reviews</h4>
-                <ReviewSystem
-                  locationId={String(selectedLocation.id)}
-                  locationName={selectedLocation.name}
-                  initialReviews={reviews}
-                  onReviewSubmit={handleReviewSubmit}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Fixed Footer with Get Directions - Single Button */}
-          <div className="p-4 border-t bg-white">
-            <button
-              onClick={() => {
-                const url = getDirectionsUrl({
-                  lat: selectedLocation.lat,
-                  lng: selectedLocation.lng,
-                  name: selectedLocation.name
-                });
-                window.open(url, '_blank');
-              }}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-2xl font-semibold 
-                hover:from-purple-700 hover:to-blue-700 transition-all flex items-center justify-center gap-2
-                active:scale-[0.99] shadow-lg hover:shadow-xl"
-            >
-              <Navigation className="w-5 h-5" />
-              Get Directions
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    if (isFavorite) {
+      const { error } = await locationService.removeFromFavorites(locationIdStr, user.id);
+      if (error) {
+        toast.error('Failed to remove from favorites');
+        return;
+      }
+      setFavorites(prev => prev.filter(id => id !== locationId));
+      toast.success('Removed from favorites');
+    } else {
+      const { error } = await locationService.addToFavorites(locationIdStr, user.id);
+      if (error) {
+        toast.error('Failed to add to favorites');
+        return;
+      }
+      setFavorites(prev => [...prev, locationId]);
+      toast.success('Added to favorites');
+    }
   };
 
   return (
     <main>
-      {/* Add renderLocationDetails to your JSX */}
-      {renderLocationDetails()}
+      <Toaster position="top-right" />
       <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200">
@@ -377,12 +315,30 @@ export default function Home() {
             </div>
 
             <div className="flex items-center space-x-2">
-              <button className="p-2 text-gray-600 hover:text-purple-600 transition-colors">
-                <Heart className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-600 hover:text-purple-600 transition-colors">
-                <Share className="w-5 h-5" />
-              </button>
+              {isAuthenticated && (
+                <button 
+                  onClick={() => {
+                    const favoriteCount = favorites.length;
+                    if (favoriteCount > 0) {
+                      // Could navigate to favorites page in future
+                      toast.success(`You have ${favoriteCount} favorite${favoriteCount > 1 ? 's' : ''}`);
+                    } else {
+                      toast('No favorites yet. Click the heart icon on any location to add favorites!', {
+                        icon: '💡',
+                      });
+                    }
+                  }}
+                  className="p-2 text-gray-600 hover:text-purple-600 transition-colors relative"
+                  title="View favorites"
+                >
+                  <Heart className={`w-5 h-5 ${favorites.length > 0 ? 'fill-current text-red-500' : ''}`} />
+                  {favorites.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {favorites.length}
+                    </span>
+                  )}
+                </button>
+              )}
               {authLoading ? (
                 <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
               ) : isAuthenticated ? (
@@ -500,6 +456,40 @@ export default function Home() {
             </div>
           </div>
 
+          {filteredLocations.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="max-w-md mx-auto">
+                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="w-12 h-12 text-gray-400" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">No locations found</h3>
+                <p className="text-gray-600 mb-6">
+                  {searchQuery 
+                    ? `Try adjusting your search "${searchQuery}" or browse all categories.`
+                    : `No locations found in "${categories.find(c => c.id === selectedCategory)?.name || 'this category'}".`
+                  }
+                </p>
+                <div className="flex gap-3 justify-center">
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="px-6 py-3 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors"
+                    >
+                      Clear Search
+                    </button>
+                  )}
+                  {selectedCategory !== 'all' && (
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className="px-6 py-3 border-2 border-purple-600 text-purple-600 rounded-full hover:bg-purple-50 transition-colors"
+                    >
+                      View All Categories
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredLocations.map((location) => (
               <div 
@@ -570,6 +560,7 @@ export default function Home() {
               </div>
             ))}
           </div>
+          )}
         </div>
       </section>
 
@@ -718,8 +709,12 @@ export default function Home() {
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (selectedLocation) {
+                    handleShare(selectedLocation);
+                  }
                 }}
                 className="btn-icon-lg btn-outline-secondary rounded-2xl"
+                title="Share location"
               >
                 <Share className="w-5 h-5" />
               </button>

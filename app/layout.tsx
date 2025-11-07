@@ -4,6 +4,7 @@ import "./globals.css";
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 import OfflineIndicator from '@/components/OfflineIndicator';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 
 const geistSans = Geist({
@@ -64,10 +65,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
-        <PWAInstallPrompt />
-        <OfflineIndicator />
-        <ServiceWorkerRegistration />
+        <ErrorBoundary>
+          {children}
+          <PWAInstallPrompt />
+          <OfflineIndicator />
+          <ServiceWorkerRegistration />
+        </ErrorBoundary>
       </body>
     </html>
   );

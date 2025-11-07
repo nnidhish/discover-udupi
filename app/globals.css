@@ -177,3 +177,7 @@ a {
 .btn-close {
   @apply bg-gray-900/90 backdrop-blur p-3 rounded-full hover:bg-gray-900 transition-all shadow-lg flex items-center justify-center;
 }
+
+.btn-close-light {
+  @apply bg-white/90 backdrop-blur p-3 rounded-full hover:bg-white transition-all shadow-lg flex items-center justify-center;
+}
