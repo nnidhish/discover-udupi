@@ -30,6 +30,7 @@ export const useAuth = () => {
     // Get initial session
     const getInitialSession = async () => {
       try {
+        // Force refresh session to get latest from server
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {

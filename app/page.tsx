@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { Location as BaseLocation } from '@/types/Location';
 import { Search, Filter } from 'lucide-react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 // Extend Location type to ensure image can be string or { url: string; blurDataURL?: string }
 type Location = Omit<BaseLocation, 'image'> & {
@@ -73,6 +74,7 @@ const MapModal = dynamic(
 );
 
 export default function Home() {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,7 +85,27 @@ export default function Home() {
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
 
-  const { user, profile, isAuthenticated, signInWithGoogle, signOut, loading: authLoading } = useAuth();
+  const { user, profile, isAuthenticated, signOut, loading: authLoading } = useAuth();
+
+  // Handle OAuth callback and errors from URL params
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get('error');
+      const authSuccess = params.get('auth');
+      
+      if (error) {
+        toast.error(decodeURIComponent(error));
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (authSuccess === 'success') {
+        // Refresh session after successful OAuth callback
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      }
+    }
+  }, []);
 
   // Your existing locations data
   const locations: Location[] = rawLocations as Location[];
@@ -308,7 +330,7 @@ export default function Home() {
                   placeholder="Search places..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-gray-900 bg-white placeholder:text-gray-500"
                 />
               </div>
             </div>
@@ -358,7 +380,7 @@ export default function Home() {
                 </div>
               ) : (
                 <button
-                  onClick={() => signInWithGoogle()}
+                  onClick={() => router.push('/auth/signin')}
                   className="px-3 py-1 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full hover:from-purple-700 hover:to-blue-700"
                 >
                   Sign in
@@ -375,7 +397,7 @@ export default function Home() {
                 placeholder="Search places..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-gray-900 bg-white placeholder:text-gray-500"
               />
             </div>
           </div>
