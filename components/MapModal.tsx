@@ -51,8 +51,16 @@ const MapModal: React.FC<MapModalProps> = ({
   const [selectedMapLocation, setSelectedMapLocation] = useState<Location | null>(null);
 
   const handleLocationSelect = (location: Location) => {
+    // Only update the internal state for highlighting, don't open the details card
     setSelectedMapLocation(location);
-    onLocationSelect(location);
+  };
+
+  const handleViewDetails = () => {
+    // Only open the details card when explicitly clicking "View Details"
+    if (selectedMapLocation) {
+      onLocationSelect(selectedMapLocation);
+      onClose();
+    }
   };
 
   if (!isOpen) return null;
@@ -107,7 +115,10 @@ const MapModal: React.FC<MapModalProps> = ({
                         {location.description.substring(0, 100)}...
                       </p>
                       <button
-                        onClick={() => handleLocationSelect(location)}
+                        onClick={() => {
+                          setSelectedMapLocation(location);
+                          handleViewDetails();
+                        }}
                         className="mt-2 text-sm text-purple-600 hover:text-purple-800 font-semibold"
                       >
                         View Details
@@ -211,10 +222,7 @@ const MapModal: React.FC<MapModalProps> = ({
             </button>
             {selectedMapLocation && (
               <button
-                onClick={() => {
-                  onLocationSelect(selectedMapLocation);
-                  onClose();
-                }}
+                onClick={handleViewDetails}
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
               >
                 <Navigation className="w-4 h-4" />

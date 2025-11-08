@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Clock, Star, Heart, Share, Navigation, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { Location as BaseLocation } from '@/types/Location';
-import { shimmer, toBase64 } from '@/utils/image';
 import { Search, Filter } from 'lucide-react';
 import Image from 'next/image';
 
@@ -151,6 +150,23 @@ export default function Home() {
     })();
   }, [selectedLocation]);
 
+  // Load favorites from Supabase on mount
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      (async () => {
+        const { data, error } = await locationService.getFavorites(user.id);
+        if (!error && data) {
+          const favoriteIds = (data as unknown as Array<{ location_id: string; locations?: { id: string } | null }>)
+            .map((fav) => fav.locations?.id)
+            .filter((id): id is string => typeof id === 'string' && id !== '')
+            .map((id) => parseInt(id, 10))
+            .filter((id) => !isNaN(id));
+          setFavorites(favoriteIds);
+        }
+      })();
+    }
+  }, [isAuthenticated, user]);
+
   const handleReviewSubmit = async (
     partial: { rating?: number; title?: string; comment?: string; visitDate?: string; images?: string[] }
   ) => {
@@ -196,17 +212,6 @@ export default function Home() {
     toast.success('Review submitted');
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-teal-500 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold">Discovering Udupi...</h2>
-        </div>
-      </div>
-    );
-  }
-
   // Share location functionality
   const handleShare = async (location: Location) => {
     const shareData = {
@@ -230,28 +235,22 @@ export default function Home() {
       try {
         await navigator.clipboard.writeText(shareData.url);
         toast.success('Link copied to clipboard!');
-      } catch (error) {
+      } catch {
         toast.error('Failed to copy link');
       }
     }
   };
 
-  // Load favorites from Supabase on mount
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      (async () => {
-        const { data, error } = await locationService.getFavorites(user.id);
-        if (!error && data) {
-          const favoriteIds = data
-            .map((fav: any) => fav.locations?.id)
-            .filter(Boolean)
-            .map((id: string) => parseInt(id, 10))
-            .filter((id: number) => !isNaN(id));
-          setFavorites(favoriteIds);
-        }
-      })();
-    }
-  }, [isAuthenticated, user]);
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-teal-500 flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold">Discovering Udupi...</h2>
+        </div>
+      </div>
+    );
+  }
 
   // Persist favorites to Supabase
   const toggleFavorite = async (locationId: number) => {
@@ -343,9 +342,11 @@ export default function Home() {
                 <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
               ) : isAuthenticated ? (
                 <div className="flex items-center space-x-2">
-                  <img
+                  <Image
                     src={profile?.avatar_url || 'https://www.gravatar.com/avatar/?d=mp'}
                     alt={profile?.full_name || user?.email || 'User'}
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded-full border"
                   />
                   <button
@@ -382,9 +383,22 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-purple-600 via-blue-600 to-teal-500 text-white py-20 overflow-hidden">
+      <section className="relative text-white py-20 overflow-hidden">
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 animate-gradient-shift"></div>
+        
+        {/* Floating animated orbs */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-20 left-10 w-72 h-72 bg-purple-400/30 rounded-full blur-3xl animate-float-1"></div>
+          <div className="absolute top-40 right-20 w-96 h-96 bg-blue-400/30 rounded-full blur-3xl animate-float-2"></div>
+          <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-teal-400/30 rounded-full blur-3xl animate-float-3"></div>
+          <div className="absolute bottom-40 right-1/4 w-64 h-64 bg-pink-400/20 rounded-full blur-3xl animate-float-4"></div>
+        </div>
+        
+        {/* Overlay for better text readability */}
         <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 text-center">
+        
+        <div className="relative max-w-7xl mx-auto px-4 text-center z-10">
           <h2 className="text-5xl md:text-6xl font-bold mb-6">
             Explore the Soul of 
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400">
@@ -396,7 +410,16 @@ export default function Home() {
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <button 
-              onClick={() => setSelectedCategory('all')}
+              onClick={() => {
+                setSelectedCategory('all');
+                // Small delay to ensure state update and DOM render
+                setTimeout(() => {
+                  const el = document.getElementById('featured-locations');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
               className="bg-white text-purple-600 px-8 py-4 rounded-full font-semibold hover:bg-gray-100 transition-all transform hover:scale-105 shadow-lg"
             >
               Start Exploring
@@ -444,7 +467,7 @@ export default function Home() {
       </section>
 
       {/* Locations Grid */}
-      <section className="py-16 bg-gray-50">
+      <section id="featured-locations" className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8">
             <h3 className="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
