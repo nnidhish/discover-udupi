@@ -212,22 +212,6 @@ export const useAuth = () => {
     }
   };
 
-  const signInWithGoogle = async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-
-      return { data, error };
-    } catch (error) {
-      toast.error('Failed to sign in with Google');
-      return { error: { message: 'Failed to sign in with Google' } };
-    }
-  };
-
   return {
     user,
     profile,
@@ -238,7 +222,6 @@ export const useAuth = () => {
     signUp,
     signOut,
     updateProfile,
-    signInWithGoogle,
     isAuthenticated: !!user,
   };
 };
