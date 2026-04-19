@@ -1,58 +1,26 @@
-// lib/supabase.ts
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/types/database';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// For client-side usage
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+// Browser client — used for all client-side DB and auth operations
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _client: SupabaseClient<any> | null = null;
+
 export const createSupabaseClient = () => {
-  return createClientComponentClient<Database>();
+  if (!_client) {
+    _client = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return _client;
 };
 
-
-// For service role operations (admin functions)
-export const createSupabaseServiceClient = () => {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-};
-
-// Default client for components
 export const supabase = createSupabaseClient();
 
-// Helper functions for common operations
+// Server-side admin client (never expose to browser)
+export const createSupabaseServiceClient = () =>
+  createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
 export const locationService = {
-  async getLocations(category?: string, limit = 10) {
-    const query = supabase
-      .from('location_details')
-      .select('*')
-      .eq('is_active', true)
-      .limit(limit);
-    
-    if (category && category !== 'all') {
-      query.eq('category_name', category);
-    }
-    
-    return query.order('average_rating', { ascending: false });
-  },
-
-  async getLocationBySlug(slug: string) {
-    return supabase
-      .from('location_details')
-      .select('*')
-      .eq('slug', slug)
-      .eq('is_active', true)
-      .single();
-  },
-
-  async getNearbyLocations(lat: number, lng: number, radiusKm = 50) {
-    return supabase.rpc('get_nearby_locations', {
-      user_lat: lat,
-      user_lng: lng,
-      radius_km: radiusKm
-    });
-  },
-
   async addToFavorites(locationId: string, userId: string) {
     return supabase
       .from('favorites')
@@ -69,22 +37,9 @@ export const locationService = {
   async getFavorites(userId: string) {
     return supabase
       .from('favorites')
-      .select(`
-        location_id,
-        locations:location_id (
-          id,
-          name,
-          slug,
-          short_description,
-          average_rating,
-          location_images!location_images_location_id_fkey (
-            url,
-            alt_text
-          )
-        )
-      `)
+      .select('location_id')
       .eq('user_id', userId);
-  }
+  },
 };
 
 export const reviewService = {
@@ -97,10 +52,6 @@ export const reviewService = {
           full_name,
           avatar_url,
           is_verified
-        ),
-        review_images (
-          url,
-          alt_text
         )
       `)
       .eq('location_id', locationId)
@@ -116,20 +67,8 @@ export const reviewService = {
     comment: string;
     visit_date?: string | null;
   }) {
-    return supabase
-      .from('reviews')
-      .insert(review);
+    return supabase.from('reviews').insert(review);
   },
-
-  async voteHelpful(reviewId: string, userId: string, isHelpful: boolean) {
-    return supabase
-      .from('review_votes')
-      .upsert({ 
-        review_id: reviewId, 
-        user_id: userId, 
-        is_helpful: isHelpful 
-      });
-  }
 };
 
 export const profileService = {
@@ -141,25 +80,17 @@ export const profileService = {
       .single();
   },
 
-  async updateProfile(userId: string, updates: {
-    username?: string;
-    full_name?: string;
-    bio?: string;
-    avatar_url?: string;
-  }) {
-    return supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', userId);
+  async updateProfile(
+    userId: string,
+    updates: { username?: string; full_name?: string; bio?: string; avatar_url?: string },
+  ) {
+    return supabase.from('profiles').update(updates).eq('id', userId);
   },
 
-  async createProfile(userId: string, profile: {
-    username?: string;
-    full_name?: string;
-    avatar_url?: string;
-  }) {
-    return supabase
-      .from('profiles')
-      .insert({ id: userId, ...profile });
-  }
+  async createProfile(
+    userId: string,
+    profile: { email?: string; username?: string; full_name?: string; avatar_url?: string },
+  ) {
+    return supabase.from('profiles').insert({ id: userId, ...profile });
+  },
 };

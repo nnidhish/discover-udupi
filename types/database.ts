@@ -1,5 +1,7 @@
 // types/database.ts
-export interface Database {
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+export type Database = {
   public: {
     Tables: {
       profiles: {
@@ -36,6 +38,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       categories: {
         Row: {
@@ -62,6 +65,7 @@ export interface Database {
           description?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       locations: {
         Row: {
@@ -136,6 +140,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       reviews: {
         Row: {
@@ -177,6 +182,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       favorites: {
         Row: {
@@ -197,6 +203,7 @@ export interface Database {
           location_id?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       location_images: {
         Row: {
@@ -232,6 +239,7 @@ export interface Database {
           sort_order?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: {
@@ -247,6 +255,7 @@ export interface Database {
           total_reviews: number;
           images: Json;
         };
+        Relationships: [];
       };
     };
     Functions: {
@@ -268,9 +277,7 @@ export interface Database {
         }[];
       };
     };
-    Enums: {};
-    CompositeTypes: {};
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
-}
-
-type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+};

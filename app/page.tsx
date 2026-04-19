@@ -178,10 +178,8 @@ export default function Home() {
       (async () => {
         const { data, error } = await locationService.getFavorites(user.id);
         if (!error && data) {
-          const favoriteIds = (data as unknown as Array<{ location_id: string; locations?: { id: string } | null }>)
-            .map((fav) => fav.locations?.id)
-            .filter((id): id is string => typeof id === 'string' && id !== '')
-            .map((id) => parseInt(id, 10))
+          const favoriteIds = (data as Array<{ location_id: string }>)
+            .map((fav) => parseInt(fav.location_id, 10))
             .filter((id) => !isNaN(id));
           setFavorites(favoriteIds);
         }
@@ -337,20 +335,10 @@ export default function Home() {
 
             <div className="flex items-center space-x-2">
               {isAuthenticated && (
-                <button 
-                  onClick={() => {
-                    const favoriteCount = favorites.length;
-                    if (favoriteCount > 0) {
-                      // Could navigate to favorites page in future
-                      toast.success(`You have ${favoriteCount} favorite${favoriteCount > 1 ? 's' : ''}`);
-                    } else {
-                      toast('No favorites yet. Click the heart icon on any location to add favorites!', {
-                        icon: '💡',
-                      });
-                    }
-                  }}
+                <button
+                  onClick={() => router.push('/bucketlist')}
                   className="p-2 text-gray-600 hover:text-purple-600 transition-colors relative"
-                  title="View favorites"
+                  title="View bucket list"
                 >
                   <Heart className={`w-5 h-5 ${favorites.length > 0 ? 'fill-current text-red-500' : ''}`} />
                   {favorites.length > 0 && (
@@ -360,9 +348,7 @@ export default function Home() {
                   )}
                 </button>
               )}
-              {authLoading ? (
-                <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
-              ) : isAuthenticated ? (
+              {isAuthenticated ? (
                 <div className="flex items-center space-x-2">
                   <Image
                     src={profile?.avatar_url || 'https://www.gravatar.com/avatar/?d=mp'}
@@ -371,20 +357,31 @@ export default function Home() {
                     height={32}
                     className="w-8 h-8 rounded-full border"
                   />
+                  <span className="hidden sm:block text-sm font-medium text-gray-700">
+                    {profile?.full_name || user?.email?.split('@')[0]}
+                  </span>
                   <button
                     onClick={() => signOut()}
-                    className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50"
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700"
                   >
                     Sign out
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => router.push('/auth/signin')}
-                  className="px-3 py-1 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full hover:from-purple-700 hover:to-blue-700"
-                >
-                  Sign in
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => router.push('/auth/signin')}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700"
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    onClick={() => router.push('/auth/signup')}
+                    className="px-3 py-1 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full hover:from-purple-700 hover:to-blue-700"
+                  >
+                    Sign up
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -421,8 +418,13 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/20"></div>
         
         <div className="relative max-w-7xl mx-auto px-4 text-center z-10">
+          <p className="text-sm font-medium opacity-80 mb-3 tracking-widest uppercase">
+            {isAuthenticated && profile?.full_name
+              ? `Welcome back, ${profile.full_name}!`
+              : 'Welcome, Stranger!'}
+          </p>
           <h2 className="text-5xl md:text-6xl font-bold mb-6">
-            Explore the Soul of 
+            Explore the Soul of
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400">
               Udupi
             </span>

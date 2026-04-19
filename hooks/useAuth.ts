@@ -99,17 +99,18 @@ export const useAuth = () => {
       const { data, error } = await profileService.getProfile(userId);
 
       if (error) {
-        // Profile doesn't exist, create one
+        // Profile doesn't exist yet, create one as fallback
         if (error.code === 'PGRST116') {
           const { data: userData } = await supabase.auth.getUser();
           if (userData.user) {
             const newProfile = {
+              email: userData.user.email ?? '',
               full_name: userData.user.user_metadata?.full_name || null,
               avatar_url: userData.user.user_metadata?.avatar_url || null,
             };
-            
+
             const { data: createdProfile, error: createError } = await profileService.createProfile(userId, newProfile);
-            
+
             if (!createError && createdProfile) {
               setProfile(createdProfile[0] as Profile);
             }

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Mail, Lock, User, ArrowRight } from 'lucide-react';
@@ -15,11 +15,11 @@ export default function SignUpPage() {
   const [fullName, setFullName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Redirect if already authenticated
-  if (isAuthenticated && !loading) {
-    router.push('/');
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      router.push('/');
+    }
+  }, [isAuthenticated, loading, router]);
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
