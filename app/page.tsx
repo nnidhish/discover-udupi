@@ -500,7 +500,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative text-white py-20 overflow-hidden">
         <Image
-          src="/images/locations/beachdrone.jpg"
+          src="/images/locations/beachdrone.webp"
           alt="Udupi Beach aerial view"
           fill
           className="object-cover object-center opacity-80 drop-shadow-lg"

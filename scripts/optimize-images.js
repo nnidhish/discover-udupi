@@ -9,23 +9,30 @@ async function optimizeImages() {
   const files = fs.readdirSync(inputDir);
   
   for (const file of files) {
-    const image = sharp(path.join(inputDir, file));
+    const inputPath = path.join(inputDir, file);
+    const outputName = path.parse(file).name;
+    const outputPath = path.join(outputDir, `${outputName}.webp`);
     
-    // Generate different sizes
-    await image
+    // Skip if already converted
+    if (fs.existsSync(outputPath)) {
+      console.log(`⊘ ${file}: already converted, skipping`);
+      continue;
+    }
+    
+    // Convert to WebP
+    await sharp(inputPath)
       .resize(800, 600)
       .webp({ quality: 75 })
-      .toFile(path.join(outputDir, `${path.parse(file).name}.webp`));
-      
+      .toFile(outputPath);
+    
     // Generate blur placeholder
-    const blurPlaceholder = await image
+    const blurPlaceholder = await sharp(inputPath)
       .resize(20)
       .blur()
       .toBuffer();
-      
-    // Save blur data URL
+    
     const blurDataURL = `data:image/jpeg;base64,${blurPlaceholder.toString('base64')}`;
-    console.log(`${file}: ${blurDataURL}`);
+    console.log(`✓ ${file}: ${blurDataURL}`);
   }
 }
 
