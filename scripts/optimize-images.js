@@ -19,20 +19,13 @@ async function optimizeImages() {
       continue;
     }
     
-    // Convert to WebP
+    // Convert to WebP with higher quality for better clarity
     await sharp(inputPath)
-      .resize(800, 600)
-      .webp({ quality: 75 })
+      .resize(1200, 800, { fit: 'cover' })
+      .webp({ quality: 100 })
       .toFile(outputPath);
     
-    // Generate blur placeholder
-    const blurPlaceholder = await sharp(inputPath)
-      .resize(20)
-      .blur()
-      .toBuffer();
-    
-    const blurDataURL = `data:image/jpeg;base64,${blurPlaceholder.toString('base64')}`;
-    console.log(`✓ ${file}: ${blurDataURL}`);
+    console.log(`✓ ${file}: converted to WebP`);
   }
 }
 
