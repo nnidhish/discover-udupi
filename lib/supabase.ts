@@ -43,20 +43,46 @@ export const locationService = {
 };
 
 export const reviewService = {
-  async getLocationReviews(locationId: string, limit = 10, offset = 0) {
-    return supabase
+  async getLocationReviews(locationId: string, limit = 5, offset = 0) {
+    const { data, error, count } = await supabase
       .from('reviews')
-      .select(`
-        *,
-        profiles:user_id (
-          full_name,
-          avatar_url,
-          is_verified
-        )
-      `)
+      .select('*, profiles ( full_name, avatar_url )', { count: 'exact' })
       .eq('location_id', locationId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    if (!error) return { data, error: null, count };
+
+    // Profile join failed — fall back to plain query
+    console.warn('[reviewService] Profile join failed, falling back:', error.message);
+    const fb = await supabase
+      .from('reviews')
+      .select('*', { count: 'exact' })
+      .eq('location_id', locationId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    return fb;
+  },
+
+  async getReviewStats(locationIds: string[]) {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('location_id, rating')
+      .in('location_id', locationIds);
+
+    if (error || !data) return { counts: {} as Record<string, number>, ratings: {} as Record<string, number>, error };
+
+    const counts: Record<string, number> = {};
+    const totals: Record<string, number> = {};
+    for (const row of data as { location_id: string; rating: number }[]) {
+      counts[row.location_id] = (counts[row.location_id] ?? 0) + 1;
+      totals[row.location_id] = (totals[row.location_id] ?? 0) + row.rating;
+    }
+    const ratings: Record<string, number> = {};
+    for (const id of Object.keys(counts)) {
+      ratings[id] = totals[id] / counts[id];
+    }
+    return { counts, ratings, error: null };
   },
 
   async submitReview(review: {
@@ -68,6 +94,25 @@ export const reviewService = {
     visit_date?: string | null;
   }) {
     return supabase.from('reviews').insert(review);
+  },
+
+  // Upsert a vote; pass null to remove the vote (toggle off)
+  async voteOnReview(reviewId: string, userId: string, voteType: 'up' | 'down' | null) {
+    if (voteType === null) {
+      return supabase
+        .from('review_votes')
+        .delete()
+        .match({ review_id: reviewId, user_id: userId });
+    }
+    return supabase
+      .from('review_votes')
+      .upsert({ review_id: reviewId, user_id: userId, vote_type: voteType });
+  },
+
+  async reportReview(reviewId: string, userId: string) {
+    return supabase
+      .from('reported_reviews')
+      .upsert({ review_id: reviewId, reporter_id: userId });
   },
 };
 

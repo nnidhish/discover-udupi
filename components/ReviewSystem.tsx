@@ -1,9 +1,11 @@
-// components/ReviewSystem.tsx
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { Star, ThumbsUp, ThumbsDown, Flag, Camera, Send } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Star, ThumbsUp, ThumbsDown, Flag, Send, Loader2 } from 'lucide-react';
 import Image from 'next/image';
-import type { Map as LeafletMapType, Marker } from 'leaflet';
+import toast from 'react-hot-toast';
+import { reviewService } from '@/lib/supabase';
+
+const PAGE_SIZE = 5;
 
 interface Review {
   id: string;
@@ -24,141 +26,227 @@ interface ReviewSystemProps {
   locationId: string;
   locationName: string;
   initialReviews: Review[];
-  onReviewSubmit: (review: Partial<Review>) => void;
+  onReviewSubmit: (review: Partial<Review>) => Promise<boolean>;
+  currentUserId?: string;
 }
 
-const ReviewSystem: React.FC<ReviewSystemProps> = ({ 
-  locationId, 
-  locationName, 
-  initialReviews, 
-  onReviewSubmit 
+// ── Main component ────────────────────────────────────────────────
+const ReviewSystem: React.FC<ReviewSystemProps> = ({
+  locationId,
+  locationName,
+  initialReviews,
+  onReviewSubmit,
+  currentUserId,
 }) => {
-  const [reviews, setReviews] = useState<Review[]>(initialReviews);
+  const [reviews, setReviews]           = useState<Review[]>(initialReviews);
+  const [offset, setOffset]             = useState(initialReviews.length);
+  const [hasMore, setHasMore]           = useState(initialReviews.length >= PAGE_SIZE);
+  const [loadingMore, setLoadingMore]   = useState(false);
   const [showWriteReview, setShowWriteReview] = useState(false);
-  const [sortBy, setSortBy] = useState<'newest' | 'rating' | 'helpful'>('newest');
+  const [sortBy, setSortBy]             = useState<'newest' | 'rating' | 'helpful'>('newest');
   const [filterRating, setFilterRating] = useState<number | null>(null);
-  const mapInstanceRef = useRef<LeafletMapType | null>(null);
-  const markersRef = useRef<Marker[]>([]);
 
-  // Calculate average rating and distribution
-  const averageRating = reviews.length > 0 
-    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length 
+  // Sync when parent refreshes reviews (new submission or location change)
+  useEffect(() => {
+    setReviews(initialReviews);
+    setOffset(initialReviews.length);
+    setHasMore(initialReviews.length >= PAGE_SIZE);
+  }, [initialReviews]);
+
+  const averageRating = reviews.length > 0
+    ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
     : 0;
 
   const ratingDistribution = [5, 4, 3, 2, 1].map(rating => ({
     rating,
-    count: reviews.filter(r => r.rating === rating).length,
-    percentage: reviews.length > 0 
-      ? (reviews.filter(r => r.rating === rating).length / reviews.length) * 100 
-      : 0
+    count:      reviews.filter(r => r.rating === rating).length,
+    percentage: reviews.length > 0
+      ? (reviews.filter(r => r.rating === rating).length / reviews.length) * 100
+      : 0,
   }));
 
-  const sortedAndFilteredReviews = reviews
-    .filter(review => filterRating ? review.rating === filterRating : true)
+  const displayedReviews = reviews
+    .filter(r => filterRating ? r.rating === filterRating : true)
     .sort((a, b) => {
-      switch (sortBy) {
-        case 'rating':
-          return b.rating - a.rating;
-        case 'helpful':
-          return b.helpfulCount - a.helpfulCount;
-        default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
+      if (sortBy === 'rating')  return b.rating - a.rating;
+      if (sortBy === 'helpful') return b.helpfulCount - a.helpfulCount;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
+  const loadMore = async () => {
+    setLoadingMore(true);
+    const { data, error } = await reviewService.getLocationReviews(locationId, PAGE_SIZE, offset);
+    if (!error && data && data.length > 0) {
+      // Map Supabase rows to Review shape
+      type Row = {
+        id: string; user_id: string; rating: number; title: string | null;
+        comment: string; visit_date: string | null; helpful_count: number | null;
+        created_at: string;
+        profiles?: { full_name?: string | null; avatar_url?: string | null; is_verified?: boolean | null } | null;
+        review_images?: { url: string }[] | null;
+      };
+      const mapped: Review[] = (data as Row[]).map(r => ({
+        id: r.id, userId: r.user_id,
+        userName:    r.profiles?.full_name  || 'Explorer',
+        userAvatar:  r.profiles?.avatar_url || '/icon-192x192.png',
+        rating:      r.rating,
+        title:       r.title ?? '',
+        comment:     r.comment,
+        images:      (r.review_images ?? []).map(ri => ri.url),
+        createdAt:   r.created_at,
+        helpfulCount: r.helpful_count ?? 0,
+        isVerified:  r.profiles?.is_verified ?? false,
+        visitDate:   r.visit_date ?? undefined,
+      }));
+      setReviews(prev => [...prev, ...mapped]);
+      setOffset(prev => prev + mapped.length);
+      setHasMore(mapped.length >= PAGE_SIZE);
+    } else {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
+  };
+
+  const handleVote = async (reviewId: string, vote: 'up' | 'down', currentVote: 'up' | 'down' | null) => {
+    if (!currentUserId) { toast.error('Sign in to vote'); return; }
+    const newVote = currentVote === vote ? null : vote;
+    await reviewService.voteOnReview(reviewId, currentUserId, newVote);
+    // Optimistic update of helpfulCount reflected via ReviewCard's own state
+  };
+
+  const handleReport = async (reviewId: string) => {
+    if (!currentUserId) { toast.error('Sign in to report a review'); return; }
+    const { error } = await reviewService.reportReview(reviewId, currentUserId);
+    if (error) {
+      toast.error('Could not submit report');
+    } else {
+      toast.success('Review reported. We\'ll look into it.');
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Rating Overview */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Average Rating */}
-          <div className="text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start space-x-2 mb-2">
-              <span className="text-4xl font-bold">{averageRating.toFixed(1)}</span>
-              <div className="flex items-center">
+    <div className="space-y-5">
+
+      {/* ── Rating overview ── */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Big number + write CTA */}
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-4xl font-bold text-gray-900">{averageRating.toFixed(1)}</span>
+              <div className="flex">
                 {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-6 h-6 ${
-                      i < Math.floor(averageRating)
-                        ? 'text-yellow-500 fill-current'
-                        : i < averageRating
-                        ? 'text-yellow-500 fill-current opacity-50'
-                        : 'text-gray-300'
-                    }`}
-                  />
+                  <Star key={i} className={`w-5 h-5 ${
+                    i < Math.floor(averageRating)
+                      ? 'text-amber-400 fill-current'
+                      : i < averageRating
+                      ? 'text-amber-400 fill-current opacity-50'
+                      : 'text-gray-200'
+                  }`} />
                 ))}
               </div>
             </div>
-            <p className="text-gray-600">{reviews.length} reviews</p>
+            <p className="text-sm text-gray-500 mb-4">{reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}</p>
             <button
               onClick={() => setShowWriteReview(true)}
-              className="mt-4 bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition-colors"
+              className="px-5 py-2 text-sm font-semibold text-white rounded-full transition-opacity hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))' }}
             >
               Write a Review
             </button>
           </div>
 
-          {/* Rating Distribution */}
-          <div className="space-y-2">
+          {/* Distribution bars */}
+          <div className="space-y-1.5">
             {ratingDistribution.map(({ rating, count, percentage }) => (
-              <div key={rating} className="flex items-center space-x-3">
-                <span className="text-sm font-medium w-8">{rating}★</span>
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
+              <button
+                key={rating}
+                onClick={() => setFilterRating(filterRating === rating ? null : rating)}
+                className={`flex items-center gap-2 w-full group rounded-lg px-1 py-0.5 transition-colors ${
+                  filterRating === rating ? 'bg-amber-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <span className="text-xs font-medium text-gray-500 w-4">{rating}</span>
+                <Star className="w-3 h-3 text-amber-400 fill-current" />
+                <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
                   <div
-                    className="bg-yellow-500 h-2 rounded-full transition-all duration-300"
+                    className="h-full rounded-full bg-amber-400 transition-all duration-500"
                     style={{ width: `${percentage}%` }}
                   />
                 </div>
-                <span className="text-sm text-gray-600 w-12">{count}</span>
-              </div>
+                <span className="text-xs text-gray-400 w-5 text-right">{count}</span>
+              </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Filters and Sort */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
-        <div className="flex items-center space-x-4">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'newest' | 'rating' | 'helpful')}
-            className="px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+      {/* ── Sort + filter row ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as typeof sortBy)}
+          className="text-sm px-3 py-1.5 border border-gray-200 rounded-full focus:ring-1 focus:ring-amber-400 outline-none bg-white text-gray-700"
+        >
+          <option value="newest">Newest first</option>
+          <option value="rating">Highest rating</option>
+          <option value="helpful">Most helpful</option>
+        </select>
+        {filterRating && (
+          <button
+            onClick={() => setFilterRating(null)}
+            className="text-sm px-3 py-1.5 border border-amber-300 bg-amber-50 text-amber-700 rounded-full flex items-center gap-1"
           >
-            <option value="newest">Newest First</option>
-            <option value="rating">Highest Rating</option>
-            <option value="helpful">Most Helpful</option>
-          </select>
-          
-          <select
-            value={filterRating || ''}
-            onChange={(e) => setFilterRating(e.target.value ? Number(e.target.value) : null)}
-            className="px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
-          >
-            <option value="">All Ratings</option>
-            <option value="5">5 Stars</option>
-            <option value="4">4 Stars</option>
-            <option value="3">3 Stars</option>
-            <option value="2">2 Stars</option>
-            <option value="1">1 Star</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Reviews List */}
-      <div className="space-y-4">
-        {sortedAndFilteredReviews.map((review) => (
-          <ReviewCard key={review.id} review={review} />
-        ))}
-        
-        {sortedAndFilteredReviews.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <p>No reviews match your criteria.</p>
-          </div>
+            {filterRating}★ only <span className="text-amber-400 ml-0.5">×</span>
+          </button>
         )}
       </div>
 
-      {/* Write Review Modal */}
+      {/* ── Reviews list ── */}
+      {displayedReviews.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
+          <Star className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+          <p className="font-semibold text-gray-700 mb-1">No reviews yet</p>
+          <p className="text-sm text-gray-400 mb-4">
+            Be the first to share your experience at {locationName}
+          </p>
+          <button
+            onClick={() => setShowWriteReview(true)}
+            className="text-sm px-5 py-2 font-semibold text-white rounded-full"
+            style={{ background: 'var(--primary)' }}
+          >
+            Write the first review
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {displayedReviews.map(review => (
+            <ReviewCard
+              key={review.id}
+              review={review}
+              currentUserId={currentUserId}
+              onVote={handleVote}
+              onReport={handleReport}
+            />
+          ))}
+
+          {/* Load more */}
+          {hasMore && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="w-full py-3 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {loadingMore
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Loading…</>
+                : 'Load more reviews'
+              }
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Write review modal ── */}
       {showWriteReview && (
         <WriteReviewModal
           locationName={locationName}
@@ -170,295 +258,289 @@ const ReviewSystem: React.FC<ReviewSystemProps> = ({
   );
 };
 
-// Individual Review Card Component
-const ReviewCard: React.FC<{ review: Review }> = ({ review }) => {
+// ── Review Card ───────────────────────────────────────────────────
+const ReviewCard: React.FC<{
+  review: Review;
+  currentUserId?: string;
+  onVote: (reviewId: string, vote: 'up' | 'down', currentVote: 'up' | 'down' | null) => void;
+  onReport: (reviewId: string) => void;
+}> = ({ review, currentUserId, onVote, onReport }) => {
   const [helpfulCount, setHelpfulCount] = useState(review.helpfulCount);
-  const [showFullComment, setShowFullComment] = useState(false);
-  const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
+  const [userVote, setUserVote]         = useState<'up' | 'down' | null>(null);
+  const [reported, setReported]         = useState(false);
+  const [expanded, setExpanded]         = useState(false);
 
-  const handleHelpful = async (type: 'up' | 'down', reviewId: string) => {
-    // TODO: Implement actual API call to persist helpful votes
-    // For now, just update local state
-    if (userVote === type) {
-      setUserVote(null);
-      setHelpfulCount(prev => type === 'up' ? prev - 1 : prev + 1);
-    } else {
-      if (userVote) {
-        setHelpfulCount(prev => userVote === 'up' ? prev - 2 : prev + 2);
-      } else {
-        setHelpfulCount(prev => type === 'up' ? prev + 1 : prev - 1);
-      }
-      setUserVote(type);
-    }
-  };
-
-  const shouldTruncate = review.comment.length > 300;
-  const displayComment = shouldTruncate && !showFullComment 
-    ? review.comment.slice(0, 300) + '...' 
+  const shouldTruncate = review.comment.length > 280;
+  const displayComment = shouldTruncate && !expanded
+    ? review.comment.slice(0, 280) + '…'
     : review.comment;
 
+  const vote = (type: 'up' | 'down') => {
+    const prev = userVote;
+    // Optimistic state update
+    if (prev === type) {
+      setUserVote(null);
+      setHelpfulCount(c => type === 'up' ? c - 1 : c + 1);
+    } else {
+      if (prev) setHelpfulCount(c => prev === 'up' ? c - 2 : c + 2);
+      else      setHelpfulCount(c => type === 'up' ? c + 1 : c - 1);
+      setUserVote(type);
+    }
+    onVote(review.id, type, prev);
+  };
+
+  const report = () => {
+    if (reported) return;
+    setReported(true);
+    onReport(review.id);
+  };
+
+  const dateStr = new Date(review.createdAt).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border">
-      {/* User Info */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-3">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
           <Image
             src={review.userAvatar}
             alt={review.userName}
-            width={48}
-            height={48}
-            className="rounded-full"
+            width={40}
+            height={40}
+            className="rounded-full object-cover flex-shrink-0 border border-gray-100"
           />
           <div>
-            <div className="flex items-center space-x-2">
-              <h4 className="font-semibold">{review.userName}</h4>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-sm text-gray-900">{review.userName}</span>
               {review.isVerified && (
-                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
                   Verified
                 </span>
               )}
             </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <div className="flex items-center">
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex">
                 {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-4 h-4 ${
-                      i < review.rating
-                        ? 'text-yellow-500 fill-current'
-                        : 'text-gray-300'
-                    }`}
-                  />
+                  <Star key={i} className={`w-3 h-3 ${
+                    i < review.rating ? 'text-amber-400 fill-current' : 'text-gray-200'
+                  }`} />
                 ))}
               </div>
-              <span>•</span>
-              <span>{new Date(review.createdAt).toLocaleDateString()}</span>
+              <span className="text-xs text-gray-400">{dateStr}</span>
               {review.visitDate && (
-                <>
-                  <span>•</span>
-                  <span>Visited {new Date(review.visitDate).toLocaleDateString()}</span>
-                </>
+                <span className="text-xs text-gray-400">
+                  · visited {new Date(review.visitDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                </span>
               )}
             </div>
           </div>
         </div>
-        <button className="p-2 text-gray-400 hover:text-gray-600">
-          <Flag className="w-4 h-4" />
+
+        {/* Flag */}
+        <button
+          onClick={report}
+          disabled={reported}
+          className={`p-1.5 rounded-full transition-colors ${
+            reported ? 'text-gray-300 cursor-default' : 'text-gray-300 hover:text-red-400 hover:bg-red-50'
+          }`}
+          title={reported ? 'Reported' : 'Report this review'}
+          aria-label="Report review"
+        >
+          <Flag className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Review Content */}
-      <div className="mb-4">
-        {review.title && (
-          <h5 className="font-semibold mb-2">{review.title}</h5>
+      {/* Body */}
+      {review.title && (
+        <p className="font-semibold text-gray-900 mb-1 text-sm">{review.title}</p>
+      )}
+      <p className="text-gray-600 text-sm leading-relaxed">
+        {displayComment}
+        {shouldTruncate && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="ml-1 font-medium text-amber-600 hover:text-amber-700"
+          >
+            {expanded ? 'Show less' : 'Read more'}
+          </button>
         )}
-        <p className="text-gray-700 leading-relaxed">
-          {displayComment}
-          {shouldTruncate && (
-            <button
-              onClick={() => setShowFullComment(!showFullComment)}
-              className="text-purple-600 hover:text-purple-700 ml-1 font-medium"
-            >
-              {showFullComment ? 'Show less' : 'Read more'}
-            </button>
-          )}
-        </p>
-      </div>
+      </p>
 
-      {/* Review Images */}
+      {/* Review images */}
       {review.images && review.images.length > 0 && (
-        <div className="mb-4">
-          <div className="flex space-x-2 overflow-x-auto pb-2">
-            {review.images.map((image, index) => (
-              <Image
-                key={index}
-                src={image}
-                alt={`Review image ${index + 1}`}
-                width={120}
-                height={80}
-                className="rounded-lg object-cover flex-shrink-0"
-              />
-            ))}
-          </div>
+        <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+          {review.images.map((img, i) => (
+            <Image
+              key={i}
+              src={img}
+              alt={`Review photo ${i + 1}`}
+              width={96}
+              height={72}
+              className="rounded-lg object-cover flex-shrink-0"
+            />
+          ))}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      {/* Vote row */}
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => handleHelpful('up', review.id)}
-            className={`flex items-center space-x-1 px-3 py-1 rounded-full transition-colors ${
+            onClick={() => vote('up')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               userVote === 'up'
                 ? 'bg-green-100 text-green-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                : 'text-gray-500 hover:bg-gray-100'
             }`}
           >
-            <ThumbsUp className="w-4 h-4" />
-            <span className="text-sm">{helpfulCount > 0 ? helpfulCount : ''}</span>
+            <ThumbsUp className="w-3.5 h-3.5" />
+            Helpful{helpfulCount > 0 ? ` (${helpfulCount})` : ''}
           </button>
           <button
-            onClick={() => handleHelpful('down', review.id)}
-            className={`p-1 rounded-full transition-colors ${
+            onClick={() => vote('down')}
+            className={`p-1.5 rounded-full transition-colors ${
               userVote === 'down'
-                ? 'bg-red-100 text-red-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-red-100 text-red-500'
+                : 'text-gray-400 hover:bg-gray-100'
             }`}
+            aria-label="Not helpful"
           >
-            <ThumbsDown className="w-4 h-4" />
+            <ThumbsDown className="w-3.5 h-3.5" />
           </button>
         </div>
-        <span className="text-sm text-gray-500">
-          Helpful ({helpfulCount})
-        </span>
+        {!currentUserId && (
+          <span className="text-xs text-gray-400">Sign in to vote</span>
+        )}
       </div>
     </div>
   );
 };
 
-// Write Review Modal Component
+// ── Write Review Modal ────────────────────────────────────────────
 const WriteReviewModal: React.FC<{
   locationName: string;
   onClose: () => void;
-  onSubmit: (review: Partial<Review>) => void;
+  onSubmit: (review: Partial<Review>) => Promise<boolean>;
 }> = ({ locationName, onClose, onSubmit }) => {
-  const [rating, setRating] = useState(5);
-  const [title, setTitle] = useState('');
-  const [comment, setComment] = useState('');
+  const [rating, setRating]       = useState(5);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [title, setTitle]         = useState('');
+  const [comment, setComment]     = useState('');
   const [visitDate, setVisitDate] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      rating,
-      title,
-      comment,
-      visitDate,
-      images,
-      createdAt: new Date().toISOString(),
-    });
-    onClose();
+    if (!comment.trim()) { toast.error('Please write your review'); return; }
+    setSubmitting(true);
+    const ok = await onSubmit({ rating, title, comment, visitDate });
+    setSubmitting(false);
+    if (ok) onClose();
   };
 
+  const activeRating = hoverRating || rating;
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-2xl font-bold">Write a Review for {locationName}</h3>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-            >
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:rounded-2xl sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="p-5">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Write a Review</h3>
+              <p className="text-sm text-gray-500">{locationName}</p>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 text-xl leading-none">
               ×
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Rating */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Star rating */}
             <div>
-              <label className="block text-sm font-medium mb-2">Your Rating</label>
-              <div className="flex space-x-1">
-                {[1, 2, 3, 4, 5].map((star) => (
+              <label className="block text-sm font-medium text-gray-700 mb-2">Your rating</label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(star => (
                   <button
                     key={star}
                     type="button"
+                    onMouseEnter={() => setHoverRating(star)}
+                    onMouseLeave={() => setHoverRating(0)}
                     onClick={() => setRating(star)}
-                    className="text-2xl hover:scale-110 transition-transform"
+                    className="transition-transform hover:scale-110 active:scale-95"
                   >
-                    <Star
-                      className={`w-8 h-8 ${
-                        star <= rating
-                          ? 'text-yellow-500 fill-current'
-                          : 'text-gray-300'
-                      }`}
-                    />
+                    <Star className={`w-8 h-8 transition-colors ${
+                      star <= activeRating ? 'text-amber-400 fill-current' : 'text-gray-200'
+                    }`} />
                   </button>
                 ))}
+                <span className="ml-2 text-sm text-gray-500 self-center">
+                  {['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][activeRating]}
+                </span>
               </div>
             </div>
 
             {/* Title */}
             <div>
-              <label className="block text-sm font-medium mb-2">Review Title</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
               <input
                 type="text"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                onChange={e => setTitle(e.target.value)}
                 placeholder="Summarize your experience"
-                required
+                className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-1 focus:ring-amber-400 focus:border-transparent outline-none"
               />
             </div>
 
             {/* Comment */}
             <div>
-              <label className="block text-sm font-medium mb-2">Your Review</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Your review <span className="text-red-400">*</span></label>
               <textarea
                 value={comment}
-                onChange={(e) => {
-                  if (e.target.value.length <= 1000) {
-                    setComment(e.target.value);
-                  }
-                }}
+                onChange={e => { if (e.target.value.length <= 1000) setComment(e.target.value); }}
                 rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"
-                placeholder="Share your experience, tips, and what others should know..."
+                placeholder="Share what you liked, tips for other visitors, what to avoid…"
+                className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-1 focus:ring-amber-400 focus:border-transparent outline-none resize-none"
                 required
-                maxLength={1000}
               />
-              <p className={`text-xs mt-1 ${comment.length >= 1000 ? 'text-red-500' : 'text-gray-500'}`}>
-                {comment.length}/1000 characters
+              <p className={`text-xs mt-1 text-right ${comment.length >= 950 ? 'text-red-500' : 'text-gray-400'}`}>
+                {comment.length}/1000
               </p>
             </div>
 
-            {/* Visit Date */}
+            {/* Visit date */}
             <div>
-              <label className="block text-sm font-medium mb-2">When did you visit?</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">When did you visit? <span className="text-gray-400 font-normal">(optional)</span></label>
               <input
                 type="date"
                 value={visitDate}
-                onChange={(e) => setVisitDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                max={new Date().toISOString().split('T')[0]}
+                onChange={e => setVisitDate(e.target.value)}
+                className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-1 focus:ring-amber-400 outline-none"
               />
             </div>
 
-            {/* Image Upload */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Add Photos (Optional)</label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Camera className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600 mb-2">Image upload coming soon</p>
-                <p className="text-xs text-gray-500 mb-2">
-                  This feature will allow you to upload photos with your review
-                </p>
-                <button
-                  type="button"
-                  disabled
-                  className="bg-gray-100 text-gray-400 px-4 py-2 rounded-lg cursor-not-allowed"
-                  title="Coming soon"
-                >
-                  Choose Photos
-                </button>
-              </div>
-            </div>
-
-            {/* Submit */}
-            <div className="flex space-x-3">
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2.5 text-sm font-medium border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center"
+                disabled={submitting}
+                className="flex-1 py-2.5 text-sm font-semibold text-white rounded-xl flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))' }}
               >
-                <Send className="w-5 h-5 mr-2" />
-                Submit Review
+                {submitting
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
+                  : <><Send className="w-4 h-4" /> Submit Review</>
+                }
               </button>
             </div>
           </form>

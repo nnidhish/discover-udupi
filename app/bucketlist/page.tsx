@@ -69,8 +69,8 @@ export default function BucketList() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">U</span>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 60%, #D97706 100%)', boxShadow: '0 1px 4px rgba(180,83,9,0.25)' }}>
+                <span className="font-bold text-lg" style={{ color: '#451a03' }}>U</span>
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Discover Udupi</h1>
@@ -80,7 +80,7 @@ export default function BucketList() {
             <div className="flex items-center space-x-3">
               <Link
                 href="/"
-                className="flex items-center space-x-1 text-sm text-gray-600 hover:text-purple-600 transition-colors"
+                className="flex items-center space-x-1 text-sm text-gray-600 hover:text-amber-600 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back to exploring</span>
@@ -123,7 +123,7 @@ export default function BucketList() {
 
         {loading ? (
           <div className="flex justify-center py-24">
-            <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : savedLocations.length === 0 ? (
           /* Empty state */
@@ -137,7 +137,7 @@ export default function BucketList() {
             </p>
             <Link
               href="/"
-              className="inline-block bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-full font-semibold hover:from-purple-700 hover:to-blue-700 transition-all"
+              className="inline-block bg-gradient-to-r from-amber-500 to-amber-600 text-white px-6 py-3 rounded-full font-semibold hover:from-amber-600 hover:to-amber-700 transition-all"
             >
               Browse places
             </Link>
