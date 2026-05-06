@@ -13,6 +13,7 @@ export interface Profile {
   bio?: string;
   is_verified: boolean;
   is_local_guide: boolean;
+  is_admin?: boolean;
 }
 
 export const useAuth = () => {

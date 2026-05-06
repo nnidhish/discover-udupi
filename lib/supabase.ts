@@ -116,6 +116,56 @@ export const reviewService = {
   },
 };
 
+export const tripService = {
+  async getPublishedTrips() {
+    return supabase
+      .from('trips')
+      .select('*, author:profiles ( full_name, avatar_url ), stops:trip_stops ( * )')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false });
+  },
+
+  async getAllTrips() {
+    return supabase
+      .from('trips')
+      .select('*, author:profiles ( full_name, avatar_url ), stops:trip_stops ( * )')
+      .order('created_at', { ascending: false });
+  },
+
+  async createTrip(trip: {
+    title: string;
+    description: string;
+    author_id: string;
+    theme: string;
+    duration_label: string;
+    cover_image_url?: string;
+    is_published?: boolean;
+  }) {
+    return supabase.from('trips').insert(trip).select().single();
+  },
+
+  async updateTrip(id: string, updates: Partial<{
+    title: string;
+    description: string;
+    theme: string;
+    duration_label: string;
+    cover_image_url: string;
+    is_published: boolean;
+  }>) {
+    return supabase.from('trips').update(updates).eq('id', id);
+  },
+
+  async deleteTrip(id: string) {
+    return supabase.from('trips').delete().eq('id', id);
+  },
+
+  async upsertStops(tripId: string, stops: Array<{ location_id: number | null; stop_order: number; tip?: string; narrative?: string }>) {
+    await supabase.from('trip_stops').delete().eq('trip_id', tripId);
+    if (stops.length === 0) return { error: null };
+    return supabase.from('trip_stops').insert(stops.map((s) => ({ ...s, trip_id: tripId })));
+  },
+};
+
 export const profileService = {
   async getProfile(userId: string) {
     return supabase

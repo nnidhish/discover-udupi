@@ -22,6 +22,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { reviewService, locationService } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 import { getDirectionsUrl } from '@/utils/maps';
+import { tripService } from '@/lib/supabase';
+import { Trip } from '@/types/Trip';
+import TripSection from '@/components/TripSection';
 
 // Types for reviews
 export type ReviewItem = {
@@ -109,6 +112,9 @@ export default function Home() {
   const [reviewCounts, setReviewCounts] = useState<Record<string, number>>({});
   const [locationRatings, setLocationRatings] = useState<Record<string, number>>({});
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [tripsLoading, setTripsLoading] = useState(true);
+  const [filterBarVisible, setFilterBarVisible] = useState(true);
 
   const { user, profile, isAuthenticated, signOut, loading: authLoading } = useAuth();
 
@@ -169,6 +175,27 @@ export default function Home() {
     const timer = setTimeout(() => setIsLoading(false), 400);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    tripService.getPublishedTrips().then(({ data }) => {
+      if (data) setTrips(data as Trip[]);
+      setTripsLoading(false);
+    });
+  }, []);
+
+  // Hide filter bar only when "Recommended by Locals" has scrolled to the top of the screen.
+  // rootMargin shrinks the observation zone to a narrow band just below the nav (~65px from top),
+  // so the observer fires only when the section heading is near the top — not just anywhere in view.
+  useEffect(() => {
+    const el = document.getElementById('trip-section');
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setFilterBarVisible(!entry.isIntersecting),
+      { threshold: 0, rootMargin: '-65px 0px -88% 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [tripsLoading]);
 
   // Save scroll position to sessionStorage so page reload restores it
   useEffect(() => {
@@ -567,8 +594,16 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* Category filter pills */}
-      <section className="sticky top-[65px] z-40 bg-white/95 backdrop-blur-xl border-b border-black/[0.05]" style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)' }}>
+      {/* Category filter pills — hides behind nav (z-50) when recommendations section is visible */}
+      <section
+        className="sticky top-[65px] z-40 bg-white/95 backdrop-blur-xl border-b border-black/[0.05]"
+        style={{
+          transform: filterBarVisible ? 'translateY(0%)' : 'translateY(-100%)',
+          transition: 'transform 0.3s ease-in-out',
+          pointerEvents: filterBarVisible ? 'auto' : 'none',
+          boxShadow: '0 1px 0 rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)',
+        }}
+      >
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center gap-2 py-3 overflow-x-auto scrollbar-none">
             {categories.map((category) => {
@@ -930,6 +965,14 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Recommended by Locals */}
+      <TripSection
+        trips={trips}
+        tripsLoading={tripsLoading}
+        locations={locations}
+        onLocationClick={(loc) => setSelectedLocation(loc as Location)}
+      />
 
       {/* Map Modal */}
       {showMapModal && (
