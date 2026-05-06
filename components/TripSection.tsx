@@ -2,7 +2,8 @@
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Clock, MapPin, User, ChevronRight, Navigation } from 'lucide-react';
+import { ChevronLeft, Clock, MapPin, User, ChevronRight, Navigation, Share2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Trip, THEME_LABELS, THEME_COLORS } from '@/types/Trip';
 import { Location } from '@/types/Location';
 
@@ -159,19 +160,31 @@ export default function TripSection({ trips, tripsLoading, locations, onLocation
                   exit={{ opacity: 0, transition: { duration: 0.15 } }}
                   className="mb-8"
                 >
-                  {/* Author */}
-                  <div className="flex items-center gap-2.5 px-1 mb-5">
-                    {selectedTrip.author?.avatar_url ? (
-                      <Image src={selectedTrip.author.avatar_url} alt={selectedTrip.author.full_name ?? 'Local'} width={32} height={32} className="rounded-full border border-gray-200" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4 text-amber-600" />
+                  {/* Author + share */}
+                  <div className="flex items-center justify-between px-1 mb-5">
+                    <div className="flex items-center gap-2.5">
+                      {selectedTrip.author?.avatar_url ? (
+                        <Image src={selectedTrip.author.avatar_url} alt={selectedTrip.author.full_name ?? 'Local'} width={32} height={32} className="rounded-full border border-gray-200" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 text-amber-600" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 leading-none">{selectedTrip.author?.full_name ?? 'Local'}</p>
+                        <p className="text-xs text-amber-600 font-medium mt-0.5">Local Guide</p>
                       </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 leading-none">{selectedTrip.author?.full_name ?? 'Local'}</p>
-                      <p className="text-xs text-amber-600 font-medium mt-0.5">Local Guide</p>
                     </div>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/trips/${selectedTrip.id}`;
+                        navigator.clipboard.writeText(url).then(() => toast.success('Link copied!'));
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-amber-700 border border-gray-200 hover:border-amber-300 rounded-full px-3 py-1.5 transition-colors"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      Share
+                    </button>
                   </div>
 
                   {/* Description */}

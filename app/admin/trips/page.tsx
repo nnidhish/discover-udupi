@@ -1,9 +1,9 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import { Plus, Pencil, Trash2, Eye, EyeOff, X, ChevronUp, ChevronDown, MapPin } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, X, ChevronUp, ChevronDown, MapPin, Upload, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { tripService } from '@/lib/supabase';
+import { tripService, createSupabaseClient } from '@/lib/supabase';
 import { Trip, TripStop, TripTheme, THEME_LABELS } from '@/types/Trip';
 import { locations as allLocations } from '@/data/locations';
 import toast from 'react-hot-toast';
@@ -35,6 +35,8 @@ export default function AdminTripsPage() {
   const [stops, setStops] = useState<StopDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState<number | ''>('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchTrips = useCallback(async () => {
     setLoading(true);
@@ -99,6 +101,35 @@ export default function AdminTripsPage() {
 
   const addTextBlock = () =>
     setStops((prev) => [...prev, { location_id: null, tip: '', narrative: '' }]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setUploadingImage(true);
+    try {
+      const supabase = createSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { toast.error('Not authenticated'); return; }
+
+      const body = new FormData();
+      body.append('file', file);
+
+      const res = await fetch('/api/admin/upload-trip-image', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body,
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? 'Upload failed'); return; }
+
+      setForm((f) => ({ ...f, cover_image_url: json.url }));
+      toast.success('Image uploaded and converted to WebP');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.description.trim() || !form.duration_label.trim()) {
@@ -284,13 +315,57 @@ export default function AdminTripsPage() {
               </div>
 
               {/* Cover image */}
-              <Field label="Cover Image URL">
+              <Field label="Cover Image">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+
+                {/* Preview */}
+                {form.cover_image_url && (
+                  <div className="relative w-full h-36 rounded-xl overflow-hidden bg-gray-100 mb-2 group">
+                    <Image
+                      src={form.cover_image_url}
+                      alt="Cover preview"
+                      fill
+                      className="object-cover"
+                      sizes="480px"
+                      unoptimized={form.cover_image_url.startsWith('https://eqogvgxtdmoljoqtizfl.supabase.co')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, cover_image_url: '' }))}
+                      className="absolute top-2 right-2 w-7 h-7 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Upload button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingImage}
+                  className="w-full h-11 flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-amber-400 rounded-xl text-sm text-gray-500 hover:text-amber-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed mb-2"
+                >
+                  {uploadingImage ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Converting &amp; uploading…</>
+                  ) : (
+                    <><Upload className="w-4 h-4" /> Upload photo (auto-converts to WebP)</>
+                  )}
+                </button>
+
+                {/* URL fallback */}
                 <input
                   type="url"
                   value={form.cover_image_url}
                   onChange={(e) => setForm((f) => ({ ...f, cover_image_url: e.target.value }))}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full h-11 px-4 border-2 border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:border-amber-400 focus:outline-none focus:bg-white bg-gray-50 transition-colors"
+                  placeholder="or paste an image URL"
+                  className="w-full h-9 px-3 border border-gray-200 rounded-lg text-xs text-gray-700 placeholder:text-gray-400 focus:border-amber-400 focus:outline-none bg-gray-50 transition-colors"
                 />
               </Field>
 
