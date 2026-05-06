@@ -5,6 +5,7 @@ import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 import OfflineIndicator from '@/components/OfflineIndicator';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({
   variable: "--font-inter",
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body className={`${inter.variable} antialiased`}>
         <ErrorBoundary>
           {children}
+          <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
           <PWAInstallPrompt />
           <OfflineIndicator />
           <ServiceWorkerRegistration />

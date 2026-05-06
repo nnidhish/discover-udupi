@@ -193,6 +193,23 @@ export const useAuth = () => {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const redirectTo = `${window.location.origin}/auth/callback?next=/auth/reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success('Password reset email sent! Check your inbox.');
+      }
+      return { error };
+    } catch (error) {
+      const message = 'Failed to send reset email';
+      toast.error(message);
+      return { error: { message } };
+    }
+  };
+
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: { message: 'Not authenticated' } };
 
@@ -222,6 +239,7 @@ export const useAuth = () => {
     signIn,
     signUp,
     signOut,
+    resetPassword,
     updateProfile,
     isAuthenticated: !!user,
   };

@@ -20,7 +20,7 @@ import ImageGallery, { PhotoGrid } from '@/components/ImageGallery';
 import ReviewSystem from '@/components/ReviewSystem';
 import { useAuth } from '@/hooks/useAuth';
 import { reviewService, locationService } from '@/lib/supabase';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { getDirectionsUrl } from '@/utils/maps';
 
 // Types for reviews
@@ -374,7 +374,6 @@ export default function Home() {
 
   return (
     <main>
-      <Toaster position="top-right" />
       <div className="min-h-screen bg-[#FAFAF8]">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-black/[0.06]" style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04)' }}>

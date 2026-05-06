@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, MapPin, Star, ArrowLeft, Trash2 } from 'lucide-react';
-import toast, { Toaster } from 'react-hot-toast';
+import { Heart, MapPin, Star, ArrowLeft, Trash2, Share2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { locationService } from '@/lib/supabase';
 import { locations as allLocations } from '@/data/locations';
 import { Location } from '@/types/Location';
+import { Button } from '@/components/ui/button';
 
 export default function BucketList() {
   const router = useRouter();
@@ -37,6 +38,18 @@ export default function BucketList() {
     })();
   }, [isAuthenticated, user]);
 
+  const handleShare = () => {
+    if (savedLocations.length === 0) {
+      toast.error('Add some places first before sharing!');
+      return;
+    }
+    const ids = savedLocations.map((l) => l.id).join(',');
+    const url = `${window.location.origin}/bucketlist/share?places=${ids}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success('Share link copied to clipboard!');
+    });
+  };
+
   const handleRemove = async (location: Location) => {
     if (!user) return;
     const { error } = await locationService.removeFromFavorites(String(location.id), user.id);
@@ -62,8 +75,6 @@ export default function BucketList() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      <Toaster position="top-right" />
-
       {/* Navbar */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -94,12 +105,14 @@ export default function BucketList() {
                     height={32}
                     className="w-8 h-8 rounded-full border"
                   />
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => signOut()}
-                    className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50"
+                    className="rounded-full"
                   >
                     Sign out
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -109,16 +122,27 @@ export default function BucketList() {
 
       {/* Page header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="flex items-center space-x-3 mb-8">
-          <div className="p-2 bg-red-100 rounded-xl">
-            <Heart className="w-6 h-6 text-red-500 fill-current" />
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-red-100 rounded-xl">
+              <Heart className="w-6 h-6 text-red-500 fill-current" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">Your Bucket List</h2>
+              <p className="text-gray-500 text-sm mt-0.5">
+                {savedLocations.length} place{savedLocations.length !== 1 ? 's' : ''} saved
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">Your Bucket List</h2>
-            <p className="text-gray-500 text-sm mt-0.5">
-              {savedLocations.length} place{savedLocations.length !== 1 ? 's' : ''} saved
-            </p>
-          </div>
+          {savedLocations.length > 0 && (
+            <button
+              onClick={handleShare}
+              className="flex items-center space-x-2 px-4 py-2 rounded-full border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Share</span>
+            </button>
+          )}
         </div>
 
         {loading ? (
